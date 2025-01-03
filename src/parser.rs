@@ -61,7 +61,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, i
                         var: Var {
                             index: num.abs() as u32,
                         },
-                        negated: num < 0,
+                        positive: num > 0,
                     })
                 })
                 .collect::<Result<Vec<Lit>, io::Error>>()?;
