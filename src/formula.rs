@@ -1,9 +1,5 @@
 // Defining the types of clauses, literals, and variables
-
-use std::collections::HashMap;
-
-#[derive(Debug, Eq, PartialEq, Hash)]
-
+#[derive(Debug)]
 pub struct Var {
     pub index: u32,
 }
@@ -27,5 +23,17 @@ pub struct CNF {
 
 #[derive(Debug)]
 pub struct Assignment {
-    pub assignment: HashMap<Var, bool>,
+    assignment: Vec<bool>,
+}
+
+impl Assignment {
+    pub fn from_vector(assignment: Vec<bool>) -> Self {
+        Self { assignment }
+    }
+    pub fn get(&self, var: &Var) -> bool {
+        self.assignment[var.index as usize - 1]
+    }
+    pub fn set(&mut self, var: &Var, value: bool) {
+        self.assignment[var.index as usize - 1] = value;
+    }
 }
