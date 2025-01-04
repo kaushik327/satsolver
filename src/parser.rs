@@ -1,6 +1,6 @@
 // DIMACS CNF parser.
 
-use super::formula::{Clause, Lit, Var, CNF};
+use super::formula::{Clause, Lit, Val, Var, CNF};
 
 use itertools::Itertools;
 use std::io;
@@ -61,7 +61,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, i
                         var: Var {
                             index: num.abs() as u32,
                         },
-                        positive: num > 0,
+                        value: if num > 0 { Val::TRUE } else { Val::FALSE },
                     })
                 })
                 .collect::<Result<Vec<Lit>, io::Error>>()?;

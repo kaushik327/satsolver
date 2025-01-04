@@ -1,4 +1,6 @@
-use super::formula::{Assignment, CNF};
+use crate::formula::Clause;
+
+use super::formula::{Assignment, Lit, Val, CNF};
 
 use itertools::Itertools;
 
@@ -6,46 +8,59 @@ use itertools::Itertools;
 //     todo!()
 // }
 
-pub fn check_assignment(cnf: &CNF, assignment: &Assignment) -> Option<bool> {
-    // Evaluates incomplete assignment on CNF formula and determines if
-    // the formula is satisfied, falsified, or neither yet.
+pub fn apply_assignment(cnf: &CNF, assignment: &Assignment) -> CNF {
+    // Evaluates incomplete assignment on CNF formula and removes satisfied
+    // clauses and false literals.
+
+    let mut new_cnf_clauses: Vec<Clause> = vec![];
 
     for clause in &cnf.clauses {
-        let bools = clause
-            .literals
-            .iter()
-            .map(|lit| assignment.get(&lit.var).map(|b| b == lit.positive))
-            .collect::<Vec<_>>();
+        let mut clause_satisfied = false;
+        let mut curr_clause: Vec<Lit> = vec![];
 
-        if bools.iter().all(|v| v == &Some(false)) {
-            return Some(false);
+        for lit in &clause.literals {
+            let lit_satisfied = assignment.get(&lit.var).map(|b| b == lit.value);
+            if matches!(lit_satisfied, Some(true)) {
+                clause_satisfied = true;
+                break;
+            } else if lit_satisfied.is_none() {
+                curr_clause.push(lit.clone());
+            }
         }
-        if !bools.iter().any(|v| v == &Some(true)) {
-            return None;
+        if !clause_satisfied {
+            new_cnf_clauses.push(Clause {
+                literals: curr_clause,
+            });
         }
     }
-    return Some(true);
+    CNF {
+        num_vars: cnf.num_vars,
+        clauses: new_cnf_clauses,
+    }
 }
 
 pub fn solve_basic(cnf: &CNF) -> Option<Assignment> {
     // Literally iterate through every possible assignment.
-    std::iter::repeat([Some(false), Some(true)])
+    std::iter::repeat([Some(Val::FALSE), Some(Val::TRUE)])
         .take(cnf.num_vars as usize)
         .multi_cartesian_product()
         .map(|v| Assignment::from_vector(v.to_vec()))
-        .find(|assignment| check_assignment(cnf, assignment).is_some_and(|x| x))
+        .find(|assignment| apply_assignment(cnf, assignment).is_satisfied())
 }
 
 pub fn solve_backtrack(cnf: &CNF) -> Option<Assignment> {
     // Recursively assign each variable to true or false
     pub fn solve_backtrack_rec(cnf: &CNF, cube: &Assignment) -> Option<Assignment> {
-        match check_assignment(cnf, &cube) {
-            Some(true) => Some(cube.fill_unassigned()),
-            Some(false) => None,
-            None => cube.get_unassigned_var().and_then(|v| {
-                solve_backtrack_rec(cnf, &cube.set(&v, false))
-                    .or(solve_backtrack_rec(cnf, &cube.set(&v, true)))
-            }),
+        let new_cnf = apply_assignment(cnf, &cube);
+        if new_cnf.is_satisfied() {
+            Some(cube.fill_unassigned())
+        } else if new_cnf.is_falsified() {
+            None
+        } else {
+            cube.get_unassigned_var().and_then(|v| {
+                solve_backtrack_rec(&new_cnf, &cube.set(&v, Val::FALSE))
+                    .or(solve_backtrack_rec(&new_cnf, &cube.set(&v, Val::TRUE)))
+            })
         }
     }
     let blank_assignment = &Assignment::from_vector(vec![None; cnf.num_vars as usize]);
