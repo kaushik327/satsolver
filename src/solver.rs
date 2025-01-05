@@ -66,3 +66,42 @@ pub fn solve_backtrack(cnf: &CNF) -> Option<Assignment> {
     let blank_assignment = &Assignment::from_vector(vec![None; cnf.num_vars as usize]);
     solve_backtrack_rec(cnf, blank_assignment)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::parser;
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn test_solve_basic_sat() {
+        let text = "\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0";
+        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        assert!(solve_basic(&cnf).is_some_and(
+            |a| a.get_unassigned_var().is_none() && apply_assignment(&cnf, &a).is_satisfied()
+        ));
+    }
+
+    #[test]
+    fn test_solve_basic_unsat() {
+        let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
+        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        assert!(solve_basic(&cnf).is_none());
+    }
+
+    #[test]
+    fn test_solve_backtrack_sat() {
+        let text = "\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0";
+        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        assert!(solve_backtrack(&cnf).is_some_and(
+            |a| a.get_unassigned_var().is_none() && apply_assignment(&cnf, &a).is_satisfied()
+        ));
+    }
+
+    #[test]
+    fn test_solve_backtrack_unsat() {
+        let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
+        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        assert!(solve_backtrack(&cnf).is_none());
+    }
+}

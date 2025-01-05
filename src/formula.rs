@@ -1,5 +1,5 @@
 // Defining the types of clauses, literals, and variables
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Var {
     pub index: u32,
 }
@@ -10,18 +10,18 @@ pub enum Val {
     FALSE,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Lit {
     pub var: Var,
     pub value: Val,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Clause {
     pub literals: Vec<Lit>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CNF {
     pub num_vars: u32,
     pub clauses: Vec<Clause>,

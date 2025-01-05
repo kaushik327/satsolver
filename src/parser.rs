@@ -78,3 +78,104 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, i
 
     Ok(CNF { num_vars, clauses })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_var_out_of_bounds() {
+        let text = "p cnf 3 3\n1 2 0\n1 -2 0\n3 -4 0";
+        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        assert!(cnf.is_err());
+    }
+
+    #[test]
+    fn test_parse_too_few_clauses() {
+        let text = "p cnf 3 3\n1 2 0\n1 -2 0";
+        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        assert!(cnf.is_err());
+    }
+
+    #[test]
+    fn test_parse_too_many_clauses() {
+        let text = "p cnf 3 2\n1 2 0\n1 -2 0\n3 -2 0";
+        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        assert!(cnf.is_err());
+    }
+
+    #[test]
+    fn test_parse_normal() {
+        let text = "c comment\np cnf 5 5\n1 2 0\n1 -2 0\nc another comment\n3 4 0\n3 -4 0\n-1 -3 0";
+        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        assert!(cnf.is_ok());
+        assert_eq!(
+            cnf.unwrap(),
+            CNF {
+                num_vars: 5,
+                clauses: vec![
+                    Clause {
+                        literals: vec![
+                            Lit {
+                                var: Var { index: 1 },
+                                value: Val::TRUE
+                            },
+                            Lit {
+                                var: Var { index: 2 },
+                                value: Val::TRUE
+                            }
+                        ]
+                    },
+                    Clause {
+                        literals: vec![
+                            Lit {
+                                var: Var { index: 1 },
+                                value: Val::TRUE
+                            },
+                            Lit {
+                                var: Var { index: 2 },
+                                value: Val::FALSE
+                            }
+                        ]
+                    },
+                    Clause {
+                        literals: vec![
+                            Lit {
+                                var: Var { index: 3 },
+                                value: Val::TRUE
+                            },
+                            Lit {
+                                var: Var { index: 4 },
+                                value: Val::TRUE
+                            }
+                        ]
+                    },
+                    Clause {
+                        literals: vec![
+                            Lit {
+                                var: Var { index: 3 },
+                                value: Val::TRUE
+                            },
+                            Lit {
+                                var: Var { index: 4 },
+                                value: Val::FALSE
+                            }
+                        ]
+                    },
+                    Clause {
+                        literals: vec![
+                            Lit {
+                                var: Var { index: 1 },
+                                value: Val::FALSE
+                            },
+                            Lit {
+                                var: Var { index: 3 },
+                                value: Val::FALSE
+                            }
+                        ]
+                    },
+                ]
+            }
+        );
+    }
+}
