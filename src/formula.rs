@@ -6,8 +6,8 @@ pub struct Var {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Val {
-    TRUE,
-    FALSE,
+    True,
+    False,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,12 +22,12 @@ pub struct Clause {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CNF {
+pub struct CnfFormula {
     pub num_vars: u32,
     pub clauses: Vec<Clause>,
 }
 
-impl CNF {
+impl CnfFormula {
     pub fn is_satisfied(&self) -> bool {
         self.clauses.is_empty()
     }
@@ -65,7 +65,7 @@ impl Assignment {
         let new_assignment = self
             .assignment
             .iter()
-            .map(|v| v.or(Some(Val::FALSE)))
+            .map(|v| v.or(Some(Val::False)))
             .collect::<Vec<_>>();
         Self::from_vector(new_assignment)
     }
