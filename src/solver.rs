@@ -2,6 +2,42 @@ use crate::formula::*;
 
 use itertools::Itertools;
 
+pub fn pure_literal_eliminate(
+    cnf: &CnfFormula,
+    assignment: &Assignment,
+) -> (CnfFormula, Assignment) {
+    let mut seen_positive = vec![false; cnf.num_vars as usize];
+    let mut seen_negative = vec![false; cnf.num_vars as usize];
+    let mut new_assignment = assignment.clone();
+    for clause in &cnf.clauses {
+        for lit in &clause.literals {
+            if lit.value == Val::True {
+                seen_positive[(lit.var.index - 1) as usize] = true;
+            } else {
+                seen_negative[(lit.var.index - 1) as usize] = true;
+            }
+        }
+    }
+    for (i, (pos, neg)) in seen_positive.into_iter().zip(seen_negative).enumerate() {
+        if (pos, neg) == (true, false) {
+            new_assignment = new_assignment.set(
+                &Var {
+                    index: i as u32 + 1,
+                },
+                Val::True,
+            );
+        } else if (pos, neg) == (false, true) {
+            new_assignment = new_assignment.set(
+                &Var {
+                    index: i as u32 + 1,
+                },
+                Val::False,
+            );
+        }
+    }
+    (apply_assignment(cnf, &new_assignment), new_assignment)
+}
+
 pub fn unit_propagate(cnf: &CnfFormula, assignment: &Assignment) -> (CnfFormula, Assignment) {
     // Evaluates assignment on CNF, finds a unit clause, satisfies it with an assignment, and repeats
 
@@ -102,7 +138,8 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
         }
     }
     let blank_assignment = &Assignment::from_vector(vec![None; cnf.num_vars as usize]);
-    solve_dpll_rec(cnf, blank_assignment)
+    let (ple_cnf, ple_assignment) = pure_literal_eliminate(cnf, blank_assignment);
+    solve_dpll_rec(&ple_cnf, &ple_assignment)
 }
 
 #[cfg(test)]
