@@ -1,14 +1,12 @@
-use crate::formula::Clause;
-
-use super::formula::{Assignment, Lit, Val, CNF};
+use crate::formula::*;
 
 use itertools::Itertools;
 
-// pub fn unit_propagate(cnf: &CNF, assignment: &Assignment) -> (CNF, Assignment) {
+// pub fn unit_propagate(cnf: &CnfFormula, assignment: &Assignment) -> (CnfFormula, Assignment) {
 //     todo!()
 // }
 
-pub fn apply_assignment(cnf: &CNF, assignment: &Assignment) -> CNF {
+pub fn apply_assignment(cnf: &CnfFormula, assignment: &Assignment) -> CnfFormula {
     // Evaluates incomplete assignment on CNF formula and removes satisfied
     // clauses and false literals.
 
@@ -33,33 +31,33 @@ pub fn apply_assignment(cnf: &CNF, assignment: &Assignment) -> CNF {
             });
         }
     }
-    CNF {
+    CnfFormula {
         num_vars: cnf.num_vars,
         clauses: new_cnf_clauses,
     }
 }
 
-pub fn solve_basic(cnf: &CNF) -> Option<Assignment> {
+pub fn solve_basic(cnf: &CnfFormula) -> Option<Assignment> {
     // Literally iterate through every possible assignment.
-    std::iter::repeat([Some(Val::FALSE), Some(Val::TRUE)])
+    std::iter::repeat([Some(Val::False), Some(Val::True)])
         .take(cnf.num_vars as usize)
         .multi_cartesian_product()
         .map(|v| Assignment::from_vector(v.to_vec()))
         .find(|assignment| apply_assignment(cnf, assignment).is_satisfied())
 }
 
-pub fn solve_backtrack(cnf: &CNF) -> Option<Assignment> {
+pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
-    pub fn solve_backtrack_rec(cnf: &CNF, cube: &Assignment) -> Option<Assignment> {
-        let new_cnf = apply_assignment(cnf, &cube);
+    pub fn solve_backtrack_rec(cnf: &CnfFormula, cube: &Assignment) -> Option<Assignment> {
+        let new_cnf = apply_assignment(cnf, cube);
         if new_cnf.is_satisfied() {
             Some(cube.fill_unassigned())
         } else if new_cnf.is_falsified() {
             None
         } else {
             cube.get_unassigned_var().and_then(|v| {
-                solve_backtrack_rec(&new_cnf, &cube.set(&v, Val::FALSE))
-                    .or(solve_backtrack_rec(&new_cnf, &cube.set(&v, Val::TRUE)))
+                solve_backtrack_rec(&new_cnf, &cube.set(&v, Val::False))
+                    .or(solve_backtrack_rec(&new_cnf, &cube.set(&v, Val::True)))
             })
         }
     }
@@ -69,8 +67,8 @@ pub fn solve_backtrack(cnf: &CNF) -> Option<Assignment> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::parser;
     use super::*;
+    use crate::parser;
     use std::io;
 
     #[test]

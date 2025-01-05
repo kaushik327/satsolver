@@ -1,16 +1,16 @@
 // DIMACS CNF parser.
 
-use super::formula::{Clause, Lit, Val, Var, CNF};
+use crate::formula::*;
 
 use itertools::Itertools;
 use std::io;
 use std::io::BufRead;
 
-pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, io::Error> {
+pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFormula, io::Error> {
     // Split into non-comment lines and tokenize
     let mut tokens = reader
         .lines()
-        .filter_map(Result::ok)
+        .map_while(Result::ok)
         .filter(|line| !line.starts_with('c'))
         .flat_map(|line| {
             line.split_whitespace()
@@ -41,7 +41,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, i
     // Split numeric tokens by zeros and turn into literals and clauses
     let nums = tokens.map(|token| {
         if let Ok(num) = token.parse::<i32>() {
-            if num.abs() as u32 <= num_vars {
+            if num.unsigned_abs() <= num_vars {
                 return Ok(num);
             }
         }
@@ -59,9 +59,9 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, i
                 .map(|res| {
                     res.map(|num| Lit {
                         var: Var {
-                            index: num.abs() as u32,
+                            index: num.unsigned_abs(),
                         },
-                        value: if num > 0 { Val::TRUE } else { Val::FALSE },
+                        value: if num > 0 { Val::True } else { Val::False },
                     })
                 })
                 .collect::<Result<Vec<Lit>, io::Error>>()?;
@@ -76,7 +76,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CNF, i
         ));
     }
 
-    Ok(CNF { num_vars, clauses })
+    Ok(CnfFormula { num_vars, clauses })
 }
 
 #[cfg(test)]
@@ -111,18 +111,18 @@ mod tests {
         assert!(cnf.is_ok());
         assert_eq!(
             cnf.unwrap(),
-            CNF {
+            CnfFormula {
                 num_vars: 5,
                 clauses: vec![
                     Clause {
                         literals: vec![
                             Lit {
                                 var: Var { index: 1 },
-                                value: Val::TRUE
+                                value: Val::True
                             },
                             Lit {
                                 var: Var { index: 2 },
-                                value: Val::TRUE
+                                value: Val::True
                             }
                         ]
                     },
@@ -130,11 +130,11 @@ mod tests {
                         literals: vec![
                             Lit {
                                 var: Var { index: 1 },
-                                value: Val::TRUE
+                                value: Val::True
                             },
                             Lit {
                                 var: Var { index: 2 },
-                                value: Val::FALSE
+                                value: Val::False
                             }
                         ]
                     },
@@ -142,11 +142,11 @@ mod tests {
                         literals: vec![
                             Lit {
                                 var: Var { index: 3 },
-                                value: Val::TRUE
+                                value: Val::True
                             },
                             Lit {
                                 var: Var { index: 4 },
-                                value: Val::TRUE
+                                value: Val::True
                             }
                         ]
                     },
@@ -154,11 +154,11 @@ mod tests {
                         literals: vec![
                             Lit {
                                 var: Var { index: 3 },
-                                value: Val::TRUE
+                                value: Val::True
                             },
                             Lit {
                                 var: Var { index: 4 },
-                                value: Val::FALSE
+                                value: Val::False
                             }
                         ]
                     },
@@ -166,11 +166,11 @@ mod tests {
                         literals: vec![
                             Lit {
                                 var: Var { index: 1 },
-                                value: Val::FALSE
+                                value: Val::False
                             },
                             Lit {
                                 var: Var { index: 3 },
-                                value: Val::FALSE
+                                value: Val::False
                             }
                         ]
                     },
