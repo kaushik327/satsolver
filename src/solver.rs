@@ -2,9 +2,30 @@ use crate::formula::*;
 
 use itertools::Itertools;
 
-// pub fn unit_propagate(cnf: &CnfFormula, assignment: &Assignment) -> (CnfFormula, Assignment) {
-//     todo!()
-// }
+pub fn unit_propagate(cnf: &CnfFormula, assignment: &Assignment) -> (CnfFormula, Assignment) {
+    // Evaluates assignment on CNF, finds a unit clause, satisfies it with an assignment, and repeats
+
+    fn get_unit_clause(cnf: &CnfFormula) -> Option<&Clause> {
+        cnf.clauses.iter().find(|clause| clause.literals.len() == 1)
+    }
+
+    let mut new_cnf = cnf.clone();
+    let mut new_assignment = assignment.clone();
+
+    loop {
+        new_cnf = apply_assignment(&new_cnf, &new_assignment);
+        if new_cnf.is_satisfied() || new_cnf.is_falsified() {
+            break;
+        }
+        if let Some(unit_clause) = get_unit_clause(&new_cnf) {
+            let lit = &unit_clause.literals[0];
+            new_assignment = new_assignment.set(&lit.var, lit.value);
+        } else {
+            break;
+        }
+    }
+    (new_cnf, new_assignment)
+}
 
 pub fn apply_assignment(cnf: &CnfFormula, assignment: &Assignment) -> CnfFormula {
     // Evaluates incomplete assignment on CNF formula and removes satisfied
@@ -65,6 +86,25 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
     solve_backtrack_rec(cnf, blank_assignment)
 }
 
+pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
+    // Recursively assign each variable to true or false
+    pub fn solve_dpll_rec(cnf: &CnfFormula, cube: &Assignment) -> Option<Assignment> {
+        let (new_cnf, new_assignment) = unit_propagate(cnf, cube);
+        if new_cnf.is_satisfied() {
+            Some(new_assignment.fill_unassigned())
+        } else if new_cnf.is_falsified() {
+            None
+        } else {
+            cube.get_unassigned_var().and_then(|v| {
+                solve_dpll_rec(&new_cnf, &new_assignment.set(&v, Val::False))
+                    .or(solve_dpll_rec(&new_cnf, &new_assignment.set(&v, Val::True)))
+            })
+        }
+    }
+    let blank_assignment = &Assignment::from_vector(vec![None; cnf.num_vars as usize]);
+    solve_dpll_rec(cnf, blank_assignment)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +141,21 @@ mod tests {
         let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
         let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
         assert!(solve_backtrack(&cnf).is_none());
+    }
+
+    #[test]
+    fn test_solve_dpll_sat() {
+        let text = "\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0";
+        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        assert!(solve_dpll(&cnf).is_some_and(
+            |a| a.get_unassigned_var().is_none() && apply_assignment(&cnf, &a).is_satisfied()
+        ));
+    }
+
+    #[test]
+    fn test_solve_dpll_unsat() {
+        let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
+        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        assert!(solve_dpll(&cnf).is_none());
     }
 }
