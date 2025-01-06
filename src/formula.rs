@@ -27,15 +27,6 @@ pub struct CnfFormula {
     pub clauses: Vec<Clause>,
 }
 
-impl CnfFormula {
-    pub fn is_satisfied(&self) -> bool {
-        self.clauses.is_empty()
-    }
-    pub fn is_falsified(&self) -> bool {
-        self.clauses.iter().any(|clause| clause.literals.is_empty())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Assignment {
     assignment: Vec<Option<Val>>,
@@ -68,5 +59,53 @@ impl Assignment {
             .map(|v| v.or(Some(Val::False)))
             .collect::<Vec<_>>();
         Self::from_vector(new_assignment)
+    }
+}
+
+#[derive(Clone)]
+pub struct SolverState {
+    pub num_vars: u32,
+    pub clauses: Vec<Clause>,
+    pub assignment: Assignment,
+}
+
+impl SolverState {
+    pub fn from_cnf(cnf: &CnfFormula) -> Self {
+        Self {
+            num_vars: cnf.num_vars,
+            clauses: cnf.clauses.clone(),
+            assignment: Assignment::from_vector(vec![None; cnf.num_vars as usize]),
+        }
+    }
+
+    pub fn is_satisfied(&self) -> bool {
+        self.clauses.is_empty()
+    }
+    pub fn is_falsified(&self) -> bool {
+        self.clauses.iter().any(|clause| clause.literals.is_empty())
+    }
+
+    pub fn assign(&self, var: &Var, value: Val) -> Self {
+        let mut new_cnf_clauses: Vec<Clause> = vec![];
+        for clause in &self.clauses {
+            if !clause.literals.contains(&Lit {
+                var: var.clone(),
+                value,
+            }) {
+                new_cnf_clauses.push(Clause {
+                    literals: clause
+                        .literals
+                        .iter()
+                        .filter(|lit| &lit.var != var)
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                })
+            }
+        }
+        Self {
+            num_vars: self.num_vars,
+            clauses: new_cnf_clauses,
+            assignment: self.assignment.set(var, value),
+        }
     }
 }
