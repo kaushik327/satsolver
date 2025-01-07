@@ -62,7 +62,7 @@ impl Assignment {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SolverState {
     pub num_vars: u32,
     pub clauses: Vec<Clause>,
