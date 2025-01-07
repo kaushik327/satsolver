@@ -79,35 +79,37 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFor
     Ok(CnfFormula { num_vars, clauses })
 }
 
+pub fn parse_dimacs_str(text: &[u8]) -> Result<CnfFormula, io::Error> {
+    parse_dimacs(&mut io::BufReader::new(text))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parse_var_out_of_bounds() {
-        let text = "p cnf 3 3\n1 2 0\n1 -2 0\n3 -4 0";
-        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        let cnf = parse_dimacs_str(b"p cnf 3 3\n1 2 0\n1 -2 0\n3 -4 0");
         assert!(cnf.is_err());
     }
 
     #[test]
     fn test_parse_too_few_clauses() {
-        let text = "p cnf 3 3\n1 2 0\n1 -2 0";
-        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        let cnf = parse_dimacs_str(b"p cnf 3 3\n1 2 0\n1 -2 0");
         assert!(cnf.is_err());
     }
 
     #[test]
     fn test_parse_too_many_clauses() {
-        let text = "p cnf 3 2\n1 2 0\n1 -2 0\n3 -2 0";
-        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        let cnf = parse_dimacs_str(b"p cnf 3 2\n1 2 0\n1 -2 0\n3 -2 0");
         assert!(cnf.is_err());
     }
 
     #[test]
     fn test_parse_normal() {
-        let text = "c comment\np cnf 5 5\n1 2 0\n1 -2 0\nc another comment\n3 4 0\n3 -4 0\n-1 -3 0";
-        let cnf = parse_dimacs(&mut io::BufReader::new(text.as_bytes()));
+        let cnf = parse_dimacs_str(
+            b"c comment\np cnf 5 5\n1 2 0\n1 -2 0\nc another comment\n3 4 0\n3 -4 0\n-1 -3 0",
+        );
         assert!(cnf.is_ok());
         assert_eq!(
             cnf.unwrap(),

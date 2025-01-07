@@ -36,25 +36,20 @@ pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
     new_state
 }
 
-pub fn unit_propagate(state: &SolverState) -> SolverState {
-    fn get_unit_literal(state: &SolverState) -> Option<Lit> {
+pub fn unit_propagate(state: &SolverState) -> Option<(Lit, SolverState)> {
+    // One round of unit propagation
+    if state.is_satisfied() || state.is_falsified() {
+        None
+    } else {
         state
             .clauses
             .iter()
             .find(|clause| clause.literals.len() == 1)
-            .map(|clause| clause.literals[0].clone())
+            .map(|clause| {
+                let lit = clause.literals[0].clone();
+                (lit.clone(), state.assign(&lit.var, lit.value))
+            })
     }
-
-    let mut new_state = state.clone();
-
-    while !new_state.is_satisfied() && !new_state.is_falsified() {
-        if let Some(lit) = get_unit_literal(&new_state) {
-            new_state = new_state.assign(&lit.var, lit.value);
-        } else {
-            break;
-        }
-    }
-    new_state
 }
 
 pub fn check_assignment(cnf: &CnfFormula, assignment: &Assignment) -> bool {
@@ -99,7 +94,10 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
 pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
     pub fn solve_dpll_rec(state: &SolverState) -> Option<Assignment> {
-        let ucp_state = unit_propagate(state);
+        let mut ucp_state = state.clone();
+        while let Some(ucp_result) = unit_propagate(&ucp_state) {
+            (_, ucp_state) = ucp_result;
+        }
         if ucp_state.is_satisfied() {
             Some(ucp_state.assignment.fill_unassigned())
         } else if ucp_state.is_falsified() {
@@ -119,51 +117,69 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser;
-    use std::io;
+    use crate::parser::parse_dimacs_str;
 
     #[test]
     fn test_solve_basic_sat() {
-        let text = "\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0";
-        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
         assert!(solve_basic(&cnf)
             .is_some_and(|a| a.get_unassigned_var().is_none() && check_assignment(&cnf, &a)));
     }
 
     #[test]
     fn test_solve_basic_unsat() {
-        let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
-        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
         assert!(solve_basic(&cnf).is_none());
     }
 
     #[test]
     fn test_solve_backtrack_sat() {
-        let text = "\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0";
-        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
         assert!(solve_backtrack(&cnf)
             .is_some_and(|a| a.get_unassigned_var().is_none() && check_assignment(&cnf, &a)));
     }
 
     #[test]
     fn test_solve_backtrack_unsat() {
-        let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
-        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
         assert!(solve_backtrack(&cnf).is_none());
     }
 
     #[test]
     fn test_solve_dpll_sat() {
-        let text = "\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0";
-        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
         assert!(solve_dpll(&cnf)
             .is_some_and(|a| a.get_unassigned_var().is_none() && check_assignment(&cnf, &a)));
     }
 
     #[test]
     fn test_solve_dpll_unsat() {
-        let text = "\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0";
-        let cnf = parser::parse_dimacs(&mut io::BufReader::new(text.as_bytes())).unwrap();
+        let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
         assert!(solve_dpll(&cnf).is_none());
+    }
+
+    #[test]
+    fn test_ucp() {
+        let pre_ucp = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n-1 -2 0\n1 0\n3 4 0").unwrap();
+        let post_ucp = parse_dimacs_str(b"\np cnf 5 2\n-2 0\n3 4 0").unwrap();
+
+        assert!(
+            unit_propagate(&SolverState::from_cnf(&pre_ucp)).is_some_and(|(lit, res)| {
+                lit == Lit {
+                    var: Var { index: 1 },
+                    value: Val::True,
+                } && res.clauses == post_ucp.clauses
+            })
+        );
+    }
+
+    #[test]
+    fn test_ple() {
+        let pre_ple = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-3 0").unwrap();
+        let post_ple = parse_dimacs_str(b"\np cnf 5 3\n3 4 0\n3 -4 0\n-3 0").unwrap();
+
+        assert!(
+            pure_literal_eliminate(&SolverState::from_cnf(&pre_ple)).clauses == post_ple.clauses
+        );
     }
 }
