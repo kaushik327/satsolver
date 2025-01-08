@@ -1,6 +1,7 @@
 mod formula;
 mod parser;
 mod solver;
+mod solverstate;
 
 use std::io;
 
