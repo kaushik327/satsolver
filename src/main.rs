@@ -12,4 +12,5 @@ fn main() {
     println!("{:#?}", solver::solve_basic(&cnf));
     println!("{:#?}", solver::solve_backtrack(&cnf));
     println!("{:#?}", solver::solve_dpll(&cnf));
+    println!("{:#?}", solver::solve_cdcl(&cnf));
 }
