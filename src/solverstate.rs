@@ -1,19 +1,61 @@
+use itertools::Itertools;
+
 use crate::formula::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SolverClause {
+    pub literals: Vec<Lit>,
+    pub original: Vec<Lit>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct SolverState {
     pub num_vars: u32,
-    pub clauses: Vec<Clause>,
+    pub clauses: Vec<SolverClause>,
     pub assignment: Assignment,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum TrailReason {
+    Decision(SolverState),
+    UnitProp(Clause),
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct TrailElement {
+    pub lit: Lit,
+    pub reason: TrailReason,
+}
+
+pub struct CdclState {
+    pub state: SolverState,
+    pub trail: Vec<TrailElement>,
 }
 
 impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
         Self {
             num_vars: cnf.num_vars,
-            clauses: cnf.clauses.clone(),
+            clauses: cnf
+                .clauses
+                .iter()
+                .map(|clause| SolverClause {
+                    literals: clause.literals.clone(),
+                    original: clause.literals.clone(),
+                })
+                .collect_vec(),
             assignment: Assignment::from_vector(vec![None; cnf.num_vars as usize]),
         }
+    }
+
+    #[cfg(test)]
+    pub fn get_clauses(&self) -> Vec<Clause> {
+        self.clauses
+            .iter()
+            .map(|solver_clause| Clause {
+                literals: solver_clause.literals.clone(),
+            })
+            .collect_vec()
     }
 
     pub fn is_satisfied(&self) -> bool {
@@ -24,20 +66,21 @@ impl SolverState {
     }
 
     pub fn assign(&self, var: &Var, value: Val) -> Self {
-        let mut new_cnf_clauses: Vec<Clause> = vec![];
+        let mut new_cnf_clauses: Vec<SolverClause> = vec![];
         for clause in &self.clauses {
             if !clause.literals.contains(&Lit {
                 var: var.clone(),
                 value,
             }) {
-                new_cnf_clauses.push(Clause {
+                new_cnf_clauses.push(SolverClause {
                     literals: clause
                         .literals
                         .iter()
                         .filter(|lit| &lit.var != var)
                         .cloned()
                         .collect::<Vec<_>>(),
-                })
+                    original: clause.original.clone(),
+                });
             }
         }
         Self {
@@ -82,7 +125,7 @@ pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
     new_state
 }
 
-pub fn unit_propagate(state: &SolverState) -> Option<(Lit, SolverState)> {
+pub fn unit_propagate(state: &SolverState) -> Option<(TrailElement, SolverState)> {
     // One round of unit propagation
     if state.is_satisfied() || state.is_falsified() {
         None
@@ -93,7 +136,15 @@ pub fn unit_propagate(state: &SolverState) -> Option<(Lit, SolverState)> {
             .find(|clause| clause.literals.len() == 1)
             .map(|clause| {
                 let lit = clause.literals[0].clone();
-                (lit.clone(), state.assign(&lit.var, lit.value))
+                (
+                    TrailElement {
+                        lit: lit.clone(),
+                        reason: TrailReason::UnitProp(Clause {
+                            literals: clause.original.clone(),
+                        }),
+                    },
+                    state.assign(&lit.var, lit.value),
+                )
             })
     }
 }
@@ -117,26 +168,43 @@ mod tests {
 
     #[test]
     fn test_ucp() {
-        let pre_ucp = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n-1 -2 0\n1 0\n3 4 0").unwrap();
-        let post_ucp = parse_dimacs_str(b"\np cnf 5 2\n-2 0\n3 4 0").unwrap();
+        let pre_ucp = SolverState::from_cnf(
+            &parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n-1 -2 0\n1 0\n3 4 0").unwrap(),
+        );
+        let expected = parse_dimacs_str(b"\np cnf 5 2\n-2 0\n3 4 0").unwrap();
 
-        assert!(
-            unit_propagate(&SolverState::from_cnf(&pre_ucp)).is_some_and(|(lit, res)| {
-                lit == Lit {
+        let Some((trail, post_ucp)) = unit_propagate(&pre_ucp) else {
+            panic!();
+        };
+
+        assert_eq!(
+            trail,
+            TrailElement {
+                lit: Lit {
                     var: Var { index: 1 },
                     value: Val::True,
-                } && res.clauses == post_ucp.clauses
-            })
+                },
+                reason: TrailReason::UnitProp(Clause {
+                    literals: vec![Lit {
+                        var: Var { index: 1 },
+                        value: Val::True,
+                    }],
+                }),
+            }
         );
+
+        assert_eq!(post_ucp.get_clauses(), expected.clauses);
     }
 
     #[test]
     fn test_ple() {
-        let pre_ple = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-3 0").unwrap();
-        let post_ple = parse_dimacs_str(b"\np cnf 5 3\n3 4 0\n3 -4 0\n-3 0").unwrap();
-
-        assert!(
-            pure_literal_eliminate(&SolverState::from_cnf(&pre_ple)).clauses == post_ple.clauses
+        let pre_ple = SolverState::from_cnf(
+            &parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-3 0").unwrap(),
         );
+        let expected = parse_dimacs_str(b"\np cnf 5 3\n3 4 0\n3 -4 0\n-3 0").unwrap();
+
+        let post_ple = pure_literal_eliminate(&pre_ple);
+
+        assert_eq!(post_ple.get_clauses(), expected.clauses);
     }
 }

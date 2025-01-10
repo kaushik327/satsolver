@@ -79,6 +79,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFor
     Ok(CnfFormula { num_vars, clauses })
 }
 
+#[cfg(test)]
 pub fn parse_dimacs_str(text: &[u8]) -> Result<CnfFormula, io::Error> {
     parse_dimacs(&mut io::BufReader::new(text))
 }

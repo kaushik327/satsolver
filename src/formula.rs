@@ -1,16 +1,16 @@
 // Defining the types of clauses, literals, and variables
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Var {
     pub index: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Val {
     True,
     False,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Lit {
     pub var: Var,
     pub value: Val,
@@ -27,7 +27,7 @@ pub struct CnfFormula {
     pub clauses: Vec<Clause>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
     assignment: Vec<Option<Val>>,
 }
