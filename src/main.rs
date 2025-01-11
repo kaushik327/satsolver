@@ -1,6 +1,7 @@
 mod formula;
 mod parser;
 mod solve_cdcl;
+mod solve_cnc;
 mod solve_simple;
 mod solver_state;
 
@@ -15,6 +16,7 @@ fn main() {
     println!("{:?}", cnf);
 
     let solvers: &[(&str, SolverFn)] = &[
+        ("CNC", |cnf| solve_cnc::solve_cnc(cnf, 1)),
         ("CDCL", solve_cdcl::solve_cdcl),
         ("DPLL", solve_simple::solve_dpll),
         ("Backtracking", solve_simple::solve_backtrack),
@@ -27,6 +29,7 @@ fn main() {
         let answer = solver(&cnf);
         let duration = start_time.elapsed();
         println!("Solver runtime: {:?}", duration);
+        // println!("Answer: {:?}", answer);
 
         // We don't have proofs of unsatisfiability yet.
         assert!(

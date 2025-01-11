@@ -5,17 +5,13 @@ use crate::solver_state::*;
 
 use itertools::Itertools;
 
+#[derive(Clone, Debug)]
 pub struct CdclState {
     pub state: SolverState,
     pub trail: Vec<TrailElement>,
 }
 
-pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
-    let mut state = CdclState {
-        state: SolverState::from_cnf(cnf),
-        trail: vec![],
-    };
-
+pub fn solve_cdcl_from_cdcl_state(state: &mut CdclState) -> Option<Assignment> {
     loop {
         while let Some((trail_elem, ucp_result)) = unit_propagate(&state.state) {
             state.state = ucp_result;
@@ -93,6 +89,14 @@ pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
             state.state = state.state.assign(&lit.var, lit.value);
         }
     }
+}
+
+pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
+    let mut state = CdclState {
+        state: SolverState::from_cnf(cnf),
+        trail: vec![],
+    };
+    solve_cdcl_from_cdcl_state(&mut state)
 }
 
 #[cfg(test)]
