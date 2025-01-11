@@ -27,11 +27,6 @@ pub struct TrailElement {
     pub reason: TrailReason,
 }
 
-pub struct CdclState {
-    pub state: SolverState,
-    pub trail: Vec<TrailElement>,
-}
-
 impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
         Self {
