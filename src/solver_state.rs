@@ -84,6 +84,14 @@ impl SolverState {
             assignment: self.assignment.set(var, value),
         }
     }
+
+    pub fn get_unassigned_lit(&self) -> Option<Lit> {
+        // We look at literals, not original, to find literals that have not been assigned.
+        self.clauses
+            .iter()
+            .flat_map(|clause| clause.literals.clone())
+            .next()
+    }
 }
 
 pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {

@@ -78,26 +78,19 @@ pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
         } else if state.state.is_satisfied() {
             return Some(state.state.assignment.fill_unassigned());
         } else {
-            // Make some random literal true and add it to the trail.
+            // Decide some random literal and add it to the trail.
             // Note: If the formula is neither falsified nor satisfied, there
             // must be at least one unassigned variable, hence the unwrap().
 
-            // TODO: we're only deciding true values here. we should also
-            // be able to decide false values (really, we should pick a LITERAL
-            // from the formula rather than a variable)
-
-            let var = state.state.assignment.get_unassigned_var().unwrap();
+            let lit = state.state.get_unassigned_lit().unwrap();
 
             let snapshot = state.state.clone();
 
             state.trail.push(TrailElement {
-                lit: Lit {
-                    var: var.clone(),
-                    value: Val::True,
-                },
+                lit: lit.clone(),
                 reason: TrailReason::Decision(snapshot),
             });
-            state.state = state.state.assign(&var, Val::True);
+            state.state = state.state.assign(&lit.var, lit.value);
         }
     }
 }
