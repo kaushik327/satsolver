@@ -10,6 +10,16 @@ pub enum Val {
     False,
 }
 
+impl Val {
+    pub fn not(&self) -> Self {
+        if self == &Val::True {
+            Val::False
+        } else {
+            Val::True
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Lit {
     pub var: Var,
