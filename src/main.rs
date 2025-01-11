@@ -16,7 +16,7 @@ fn main() {
     println!("{:?}", cnf);
 
     let solvers: &[(&str, SolverFn)] = &[
-        ("CNC", |cnf| solve_cnc::solve_cnc(cnf, 1)),
+        ("CNC", |cnf| solve_cnc::solve_cnc(cnf, 3)),
         ("CDCL", solve_cdcl::solve_cdcl),
         ("DPLL", solve_simple::solve_dpll),
         ("Backtracking", solve_simple::solve_backtrack),
@@ -32,10 +32,8 @@ fn main() {
         // println!("Answer: {:?}", answer);
 
         // We don't have proofs of unsatisfiability yet.
-        assert!(
-            answer.is_none()
-                || answer.is_some_and(|a| a.get_unassigned_var().is_none()
-                    && solver_state::check_assignment(&cnf, &a))
-        );
+        assert!(answer.is_some_and(
+            |a| a.get_unassigned_var().is_none() && solver_state::check_assignment(&cnf, &a)
+        ));
     }
 }
