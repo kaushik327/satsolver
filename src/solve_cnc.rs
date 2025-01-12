@@ -20,37 +20,15 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
         } else if depth > 0 {
             let unassigned_var = ucp_state.state.assignment.get_unassigned_var().unwrap();
 
-            let snapshot = ucp_state.state;
+            let true_state = ucp_state.decide_literal_outofplace(&Lit {
+                var: unassigned_var.clone(),
+                value: Val::True,
+            });
 
-            let true_state = CdclState {
-                trail: {
-                    let mut v = ucp_state.trail.clone();
-                    v.push(TrailElement {
-                        lit: Lit {
-                            var: unassigned_var.clone(),
-                            value: Val::True,
-                        },
-                        reason: TrailReason::Decision(snapshot.clone()),
-                    });
-                    v
-                },
-                state: snapshot.assign(&unassigned_var.clone(), Val::True),
-            };
-
-            let false_state = CdclState {
-                trail: {
-                    let mut v = ucp_state.trail.clone();
-                    v.push(TrailElement {
-                        lit: Lit {
-                            var: unassigned_var.clone(),
-                            value: Val::False,
-                        },
-                        reason: TrailReason::Decision(snapshot.clone()),
-                    });
-                    v
-                },
-                state: snapshot.assign(&unassigned_var.clone(), Val::False),
-            };
+            let false_state = ucp_state.decide_literal_outofplace(&Lit {
+                var: unassigned_var.clone(),
+                value: Val::False,
+            });
 
             let tx1 = tx.clone();
             let tx2 = tx.clone();

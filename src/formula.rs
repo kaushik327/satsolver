@@ -26,6 +26,15 @@ pub struct Lit {
     pub value: Val,
 }
 
+impl Lit {
+    pub fn not(&self) -> Self {
+        Lit {
+            var: self.var.clone(),
+            value: self.value.not(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Clause {
     pub literals: Vec<Lit>,
