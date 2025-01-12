@@ -5,6 +5,7 @@ use crate::formula::*;
 use itertools::Itertools;
 use std::io;
 use std::io::BufRead;
+use std::io::Write;
 
 pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFormula, io::Error> {
     // Split into non-comment lines and tokenize
@@ -82,6 +83,32 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFor
 #[cfg(test)]
 pub fn parse_dimacs_str(text: &[u8]) -> Result<CnfFormula, io::Error> {
     parse_dimacs(&mut io::BufReader::new(text))
+}
+
+pub fn output_dimacs<W: io::Write>(
+    writer: &mut io::BufWriter<W>,
+    assignment: &Option<Assignment>,
+    num_vars: u32,
+) -> io::Result<()> {
+    if let Some(assignment) = assignment {
+        writer.write_all(b"s SATISFIABLE\nv")?;
+
+        for i in 1..=num_vars {
+            let Some(value) = assignment.get(&Var { index: i }) else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid assignment",
+                ));
+            };
+            writer.write_all(b" ")?;
+            if value == Val::False {
+                writer.write_all(b"-")?;
+            }
+            writer.write_all(format!("{}", i).as_bytes())?;
+        }
+    }
+    writer.write_all(b"\n")?;
+    Ok(())
 }
 
 #[cfg(test)]
