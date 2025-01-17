@@ -55,8 +55,8 @@ impl Assignment {
     pub fn from_vector(assignment: Vec<Option<Val>>) -> Self {
         Self { assignment }
     }
-    pub fn get(&self, var: &Var) -> Option<Val> {
-        self.assignment[var.index as usize - 1]
+    pub fn get(&self, lit: &Lit) -> Option<bool> {
+        self.assignment[lit.var.index as usize - 1].map(|v| v == lit.value)
     }
     pub fn set(&self, var: &Var, value: Val) -> Self {
         let mut new_assignment = self.assignment.clone();

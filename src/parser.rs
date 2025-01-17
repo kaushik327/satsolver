@@ -94,14 +94,17 @@ pub fn output_dimacs<W: io::Write>(
         writer.write_all(b"s SATISFIABLE\nv")?;
 
         for i in 1..=num_vars {
-            let Some(value) = assignment.get(&Var { index: i }) else {
+            let Some(satisfied) = assignment.get(&Lit {
+                var: Var { index: i },
+                value: Val::True,
+            }) else {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "Invalid assignment",
                 ));
             };
             writer.write_all(b" ")?;
-            if value == Val::False {
+            if !satisfied {
                 writer.write_all(b"-")?;
             }
             writer.write_all(format!("{}", i).as_bytes())?;
