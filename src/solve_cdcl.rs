@@ -78,11 +78,11 @@ pub fn solve_cdcl_from_cdcl_state(state: &mut CdclState) -> Option<Assignment> {
                 TrailReason::UnitProp(_) => panic!(),
                 TrailReason::Decision(snapshot) => snapshot.clone(),
             };
-            state.state.clauses.push(SolverClause {
-                literals: Vec::from_iter(lits_in_learned_clause.clone()),
-                original: Vec::from_iter(lits_in_learned_clause),
-            });
             state.trail.truncate(cut_idx);
+
+            state
+                .state
+                .learn_clause(Vec::from_iter(lits_in_learned_clause));
 
             // TODO: If the elements in the learned clause are all literals that were
             // decided multiple decisions beforehand, we can backjump even further.

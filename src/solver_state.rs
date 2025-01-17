@@ -92,6 +92,23 @@ impl SolverState {
             .flat_map(|clause| clause.literals.clone())
             .next()
     }
+
+    pub fn learn_clause(&mut self, lits: Vec<Lit>) {
+        for lit in &lits {
+            if matches!(self.assignment.get(&lit.var), Some(Val::True)) {
+                return;
+            }
+        }
+
+        self.clauses.push(SolverClause {
+            literals: lits
+                .clone()
+                .into_iter()
+                .filter(|lit| self.assignment.get(&lit.var).is_none())
+                .collect::<Vec<_>>(),
+            original: lits,
+        });
+    }
 }
 
 pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
