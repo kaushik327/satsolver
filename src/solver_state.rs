@@ -4,8 +4,50 @@ use crate::formula::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SolverClause {
-    pub literals: Vec<Lit>,
-    pub original: Vec<Lit>,
+    pub original: Vec<Lit>, // TODO: add pre-calculated clause state
+}
+
+impl SolverClause {
+    pub fn is_satisfied(&self, a: &Assignment) -> bool {
+        self.original.iter().any(|lit| a.get(lit) == Some(true))
+    }
+
+    pub fn is_falsified(&self, a: &Assignment) -> bool {
+        self.original.iter().all(|lit| a.get(lit) == Some(false))
+    }
+
+    #[cfg(test)]
+    pub fn get_equivalent_clause(&self, a: &Assignment) -> Option<Vec<Lit>> {
+        if self.is_satisfied(a) {
+            return None;
+        }
+
+        Some(
+            self.original
+                .iter()
+                .filter(|lit| a.get(lit).is_none())
+                .map(|lit| lit.clone())
+                .collect_vec(),
+        )
+    }
+
+    pub fn get_unit_literal(&self, a: &Assignment) -> Option<Lit> {
+        // TODO: this code is wasteful
+        let assignments = self.original.iter().map(|lit| a.get(lit)).collect_vec();
+        if assignments.contains(&Some(true)) {
+            return None;
+        }
+        let num_unassigned_vars = assignments.iter().filter(|b| b.is_none()).count();
+        if num_unassigned_vars != 1 {
+            return None;
+        }
+        return self
+            .original
+            .iter()
+            .zip(assignments)
+            .find(|(_, b)| b.is_none())
+            .map(|(lit, _)| lit.clone());
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -35,7 +77,6 @@ impl SolverState {
                 .clauses
                 .iter()
                 .map(|clause| SolverClause {
-                    literals: clause.literals.clone(),
                     original: clause.literals.clone(),
                 })
                 .collect_vec(),
@@ -44,70 +85,42 @@ impl SolverState {
     }
 
     #[cfg(test)]
-    pub fn get_clauses(&self) -> Vec<Clause> {
+    pub fn get_equivalent_clauses(&self) -> Vec<Clause> {
         self.clauses
             .iter()
-            .map(|solver_clause| Clause {
-                literals: solver_clause.literals.clone(),
-            })
+            .filter_map(|solver_clause| solver_clause.get_equivalent_clause(&self.assignment))
+            .map(|lits| Clause { literals: lits })
             .collect_vec()
     }
 
     pub fn is_satisfied(&self) -> bool {
-        self.clauses.is_empty()
+        self.clauses
+            .iter()
+            .all(|clause| clause.is_satisfied(&self.assignment))
     }
     pub fn is_falsified(&self) -> bool {
-        self.clauses.iter().any(|clause| clause.literals.is_empty())
+        self.clauses
+            .iter()
+            .any(|clause| clause.is_falsified(&self.assignment))
     }
 
     pub fn assign(&self, var: &Var, value: Val) -> Self {
-        let mut new_cnf_clauses: Vec<SolverClause> = vec![];
-        for clause in &self.clauses {
-            if !clause.literals.contains(&Lit {
-                var: var.clone(),
-                value,
-            }) {
-                new_cnf_clauses.push(SolverClause {
-                    literals: clause
-                        .literals
-                        .iter()
-                        .filter(|lit| &lit.var != var)
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                    original: clause.original.clone(),
-                });
-            }
-        }
         Self {
             num_vars: self.num_vars,
-            clauses: new_cnf_clauses,
+            clauses: self.clauses.clone(),
             assignment: self.assignment.set(var, value),
         }
     }
 
     pub fn get_unassigned_lit(&self) -> Option<Lit> {
-        // We look at literals, not original, to find literals that have not been assigned.
         self.clauses
             .iter()
-            .flat_map(|clause| clause.literals.clone())
-            .next()
+            .flat_map(|clause| clause.original.clone())
+            .find(|lit| self.assignment.get(lit).is_none())
     }
 
     pub fn learn_clause(&mut self, lits: Vec<Lit>) {
-        for lit in &lits {
-            if matches!(self.assignment.get(&lit.var), Some(Val::True)) {
-                return;
-            }
-        }
-
-        self.clauses.push(SolverClause {
-            literals: lits
-                .clone()
-                .into_iter()
-                .filter(|lit| self.assignment.get(&lit.var).is_none())
-                .collect::<Vec<_>>(),
-            original: lits,
-        });
+        self.clauses.push(SolverClause { original: lits });
     }
 }
 
@@ -115,7 +128,7 @@ pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
     let mut seen_positive = vec![false; state.num_vars as usize];
     let mut seen_negative = vec![false; state.num_vars as usize];
     for clause in &state.clauses {
-        for lit in &clause.literals {
+        for lit in &clause.original {
             if lit.value == Val::True {
                 seen_positive[(lit.var.index - 1) as usize] = true;
             } else {
@@ -153,9 +166,10 @@ pub fn unit_propagate(state: &SolverState) -> Option<(TrailElement, SolverState)
         state
             .clauses
             .iter()
-            .find(|clause| clause.literals.len() == 1)
-            .map(|clause| {
-                let lit = clause.literals[0].clone();
+            .map(|clause| (clause, clause.get_unit_literal(&state.assignment)))
+            .find(|(_, maybe_lit)| maybe_lit.is_some())
+            .map(|(clause, maybe_lit)| {
+                let Some(lit) = maybe_lit else { panic!() };
                 (
                     TrailElement {
                         lit: lit.clone(),
@@ -177,7 +191,7 @@ pub fn check_assignment(cnf: &CnfFormula, assignment: &Assignment) -> bool {
         clause
             .literals
             .iter()
-            .any(|lit| assignment.get(&lit.var).is_some_and(|b| b == lit.value))
+            .any(|lit| assignment.get(lit) == Some(true))
     })
 }
 
@@ -213,7 +227,7 @@ mod tests {
             }
         );
 
-        assert_eq!(post_ucp.get_clauses(), expected.clauses);
+        assert_eq!(post_ucp.get_equivalent_clauses(), expected.clauses);
     }
 
     #[test]
@@ -225,6 +239,6 @@ mod tests {
 
         let post_ple = pure_literal_eliminate(&pre_ple);
 
-        assert_eq!(post_ple.get_clauses(), expected.clauses);
+        assert_eq!(post_ple.get_equivalent_clauses(), expected.clauses);
     }
 }
