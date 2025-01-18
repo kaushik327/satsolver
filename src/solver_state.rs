@@ -2,18 +2,13 @@ use itertools::Itertools;
 
 use crate::formula::*;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct SolverClause {
-    pub original: Vec<Lit>, // TODO: add pre-calculated clause state
-}
-
-impl SolverClause {
+impl Clause {
     pub fn is_satisfied(&self, a: &Assignment) -> bool {
-        self.original.iter().any(|lit| a.get(lit) == Some(true))
+        self.literals.iter().any(|lit| a.get(lit) == Some(true))
     }
 
     pub fn is_falsified(&self, a: &Assignment) -> bool {
-        self.original.iter().all(|lit| a.get(lit) == Some(false))
+        self.literals.iter().all(|lit| a.get(lit) == Some(false))
     }
 
     #[cfg(test)]
@@ -23,7 +18,7 @@ impl SolverClause {
         }
 
         Some(
-            self.original
+            self.literals
                 .iter()
                 .filter(|lit| a.get(lit).is_none())
                 .map(|lit| lit.clone())
@@ -33,7 +28,7 @@ impl SolverClause {
 
     pub fn get_unit_literal(&self, a: &Assignment) -> Option<Lit> {
         // TODO: this code is wasteful
-        let assignments = self.original.iter().map(|lit| a.get(lit)).collect_vec();
+        let assignments = self.literals.iter().map(|lit| a.get(lit)).collect_vec();
         if assignments.contains(&Some(true)) {
             return None;
         }
@@ -42,7 +37,7 @@ impl SolverClause {
             return None;
         }
         return self
-            .original
+            .literals
             .iter()
             .zip(assignments)
             .find(|(_, b)| b.is_none())
@@ -52,8 +47,7 @@ impl SolverClause {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SolverState {
-    pub num_vars: u32,
-    pub clauses: Vec<SolverClause>,
+    pub formula: CnfFormula,
     pub assignment: Assignment,
 }
 
@@ -72,21 +66,15 @@ pub struct TrailElement {
 impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
         Self {
-            num_vars: cnf.num_vars,
-            clauses: cnf
-                .clauses
-                .iter()
-                .map(|clause| SolverClause {
-                    original: clause.literals.clone(),
-                })
-                .collect_vec(),
-            assignment: Assignment::from_vector(vec![None; cnf.num_vars as usize]),
+            formula: cnf.clone(),
+            assignment: Assignment::from_vector(vec![None; cnf.num_vars]),
         }
     }
 
     #[cfg(test)]
     pub fn get_equivalent_clauses(&self) -> Vec<Clause> {
-        self.clauses
+        self.formula
+            .clauses
             .iter()
             .filter_map(|solver_clause| solver_clause.get_equivalent_clause(&self.assignment))
             .map(|lits| Clause { literals: lits })
@@ -94,45 +82,47 @@ impl SolverState {
     }
 
     pub fn is_satisfied(&self) -> bool {
-        self.clauses
+        self.formula
+            .clauses
             .iter()
             .all(|clause| clause.is_satisfied(&self.assignment))
     }
     pub fn is_falsified(&self) -> bool {
-        self.clauses
+        self.formula
+            .clauses
             .iter()
             .any(|clause| clause.is_falsified(&self.assignment))
     }
 
     pub fn assign(&self, var: &Var, value: Val) -> Self {
         Self {
-            num_vars: self.num_vars,
-            clauses: self.clauses.clone(),
+            formula: self.formula.clone(),
             assignment: self.assignment.set(var, value),
         }
     }
 
     pub fn get_unassigned_lit(&self) -> Option<Lit> {
-        self.clauses
+        self.formula
+            .clauses
             .iter()
-            .flat_map(|clause| clause.original.clone())
+            .flat_map(|clause| clause.literals.clone())
             .find(|lit| self.assignment.get(lit).is_none())
     }
 
     pub fn learn_clause(&mut self, lits: Vec<Lit>) {
-        self.clauses.push(SolverClause { original: lits });
+        self.formula.clauses.push(Clause { literals: lits });
     }
 }
 
 pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
-    let mut seen_positive = vec![false; state.num_vars as usize];
-    let mut seen_negative = vec![false; state.num_vars as usize];
-    for clause in &state.clauses {
-        for lit in &clause.original {
+    let mut seen_positive = vec![false; state.formula.num_vars];
+    let mut seen_negative = vec![false; state.formula.num_vars];
+    for clause in &state.formula.clauses {
+        for lit in &clause.literals {
             if lit.value == Val::True {
-                seen_positive[(lit.var.index - 1) as usize] = true;
+                seen_positive[lit.var.index - 1] = true;
             } else {
-                seen_negative[(lit.var.index - 1) as usize] = true;
+                seen_negative[lit.var.index - 1] = true;
             }
         }
     }
@@ -140,19 +130,9 @@ pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
     let mut new_state = state.clone();
     for (i, (pos, neg)) in seen_positive.into_iter().zip(seen_negative).enumerate() {
         if (pos, neg) == (true, false) {
-            new_state = new_state.assign(
-                &Var {
-                    index: i as u32 + 1,
-                },
-                Val::True,
-            );
+            new_state = new_state.assign(&Var { index: i + 1 }, Val::True);
         } else if (pos, neg) == (false, true) {
-            new_state = new_state.assign(
-                &Var {
-                    index: i as u32 + 1,
-                },
-                Val::False,
-            );
+            new_state = new_state.assign(&Var { index: i + 1 }, Val::False);
         }
     }
     new_state
@@ -164,6 +144,7 @@ pub fn unit_propagate(state: &SolverState) -> Option<(TrailElement, SolverState)
         None
     } else {
         state
+            .formula
             .clauses
             .iter()
             .map(|clause| (clause, clause.get_unit_literal(&state.assignment)))
@@ -174,7 +155,7 @@ pub fn unit_propagate(state: &SolverState) -> Option<(TrailElement, SolverState)
                     TrailElement {
                         lit: lit.clone(),
                         reason: TrailReason::UnitProp(Clause {
-                            literals: clause.original.clone(),
+                            literals: clause.literals.clone(),
                         }),
                     },
                     state.assign(&lit.var, lit.value),
