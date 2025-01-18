@@ -1,7 +1,7 @@
 // Defining the types of clauses, literals, and variables
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Var {
-    pub index: u32,
+    pub index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,7 +42,7 @@ pub struct Clause {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CnfFormula {
-    pub num_vars: u32,
+    pub num_vars: usize,
     pub clauses: Vec<Clause>,
 }
 
@@ -56,20 +56,18 @@ impl Assignment {
         Self { assignment }
     }
     pub fn get(&self, lit: &Lit) -> Option<bool> {
-        self.assignment[lit.var.index as usize - 1].map(|v| v == lit.value)
+        self.assignment[lit.var.index - 1].map(|v| v == lit.value)
     }
     pub fn set(&self, var: &Var, value: Val) -> Self {
         let mut new_assignment = self.assignment.clone();
-        new_assignment[var.index as usize - 1] = Some(value);
+        new_assignment[var.index - 1] = Some(value);
         Self::from_vector(new_assignment)
     }
     pub fn get_unassigned_var(&self) -> Option<Var> {
         self.assignment
             .iter()
             .position(|v| v.is_none())
-            .map(|n| Var {
-                index: (n + 1) as u32,
-            })
+            .map(|n| Var { index: n + 1 })
     }
     pub fn fill_unassigned(&self) -> Self {
         let new_assignment = self

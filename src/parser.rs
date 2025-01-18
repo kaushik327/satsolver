@@ -23,10 +23,10 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFor
     let (num_vars, expected_clauses) =
         match (tokens.next(), tokens.next(), tokens.next(), tokens.next()) {
             (Some(p), Some(cnf), Some(vars), Some(clauses)) if p == "p" && cnf == "cnf" => {
-                let num_vars = vars.parse::<u32>().map_err(|_| {
+                let num_vars = vars.parse::<usize>().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidData, "Invalid number of variables")
                 })?;
-                let expected_clauses = clauses.parse::<u32>().map_err(|_| {
+                let expected_clauses = clauses.parse::<usize>().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidData, "Invalid number of clauses")
                 })?;
                 (num_vars, expected_clauses)
@@ -41,7 +41,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFor
 
     // Split numeric tokens by zeros and turn into literals and clauses
     let nums = tokens.map(|token| {
-        if let Ok(num) = token.parse::<i32>() {
+        if let Ok(num) = token.parse::<isize>() {
             if num.unsigned_abs() <= num_vars {
                 return Ok(num);
             }
@@ -70,7 +70,7 @@ pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFor
         })
         .collect::<Result<Vec<Clause>, io::Error>>()?;
 
-    if clauses.len() != expected_clauses as usize {
+    if clauses.len() != expected_clauses {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "Incorrect number of clauses",
@@ -88,7 +88,7 @@ pub fn parse_dimacs_str(text: &[u8]) -> Result<CnfFormula, io::Error> {
 pub fn output_dimacs<W: io::Write>(
     writer: &mut io::BufWriter<W>,
     assignment: &Option<Assignment>,
-    num_vars: u32,
+    num_vars: usize,
 ) -> io::Result<()> {
     if let Some(assignment) = assignment {
         writer.write_all(b"s SATISFIABLE\nv")?;
