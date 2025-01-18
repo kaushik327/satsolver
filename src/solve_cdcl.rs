@@ -3,46 +3,15 @@ use std::collections::HashSet;
 use crate::formula::*;
 use crate::solver_state::*;
 
-#[derive(Clone, Debug)]
-pub struct CdclState {
-    pub state: SolverState,
-    pub trail: Vec<TrailElement>,
-}
-
-impl CdclState {
-    pub fn get_last_decision_index(&self) -> Option<usize> {
-        self.trail
-            .iter()
-            .enumerate()
-            .filter(|(_, x)| matches!(x.reason, TrailReason::Decision(_)))
-            .last()
-            .map(|(x, _)| x)
-    }
-
-    pub fn decide_literal_inplace(&mut self, lit: &Lit) {
-        let snapshot = self.state.clone();
-        self.trail.push(TrailElement {
-            lit: lit.clone(),
-            reason: TrailReason::Decision(snapshot),
-        });
-        self.state = self.state.assign(&lit.var, lit.value);
-    }
-
-    pub fn decide_literal_outofplace(&self, lit: &Lit) -> Self {
-        let mut state = self.clone();
-        state.decide_literal_inplace(lit);
-        state
-    }
-}
-
-pub fn solve_cdcl_from_cdcl_state(state: &mut CdclState) -> Option<Assignment> {
+pub fn solve_cdcl_from_state(state: &mut SolverState) -> Option<Assignment> {
     loop {
-        while let Some((trail_elem, ucp_result)) = unit_propagate(&state.state) {
-            state.state = ucp_result;
-            state.trail.push(trail_elem);
+        // println!("\n{:?}", &state);
+
+        while let Some(ucp_result) = unit_propagate(state) {
+            *state = ucp_result;
         }
 
-        if state.state.is_falsified() {
+        if state.is_falsified() {
             // We use the last UIP cut here (i.e. cutting right after the last decision literal)
             let Some(cut_idx) = state.get_last_decision_index() else {
                 // If decision level zero, return unsat.
@@ -74,38 +43,33 @@ pub fn solve_cdcl_from_cdcl_state(state: &mut CdclState) -> Option<Assignment> {
                 .collect::<HashSet<_>>();
 
             // Backjumping to snapshotted state
-            state.state = match &cut_element.reason {
+            state.assignment = match &cut_element.reason {
                 TrailReason::UnitProp(_) => panic!(),
-                TrailReason::Decision(snapshot) => snapshot.clone(),
+                TrailReason::Decision(assignment) => assignment.clone(),
             };
             state.trail.truncate(cut_idx);
 
-            state
-                .state
-                .learn_clause(Vec::from_iter(lits_in_learned_clause));
+            state.learn_clause(Vec::from_iter(lits_in_learned_clause));
 
             // TODO: If the elements in the learned clause are all literals that were
             // decided multiple decisions beforehand, we can backjump even further.
             // This is not implemented here.
-        } else if state.state.is_satisfied() {
-            return Some(state.state.assignment.fill_unassigned());
+        } else if state.is_satisfied() {
+            return Some(state.assignment.fill_unassigned());
         } else {
             // Decide some random literal and add it to the trail.
             // Note: If the formula is neither falsified nor satisfied, there
             // must be at least one unassigned variable, hence the unwrap().
 
-            let lit = state.state.get_unassigned_lit().unwrap();
-            state.decide_literal_inplace(&lit);
+            let lit = state.get_unassigned_lit().unwrap();
+            *state = state.decide(&lit.var, lit.value);
         }
     }
 }
 
 pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
-    let mut state = CdclState {
-        state: SolverState::from_cnf(cnf),
-        trail: vec![],
-    };
-    solve_cdcl_from_cdcl_state(&mut state)
+    let mut state = SolverState::from_cnf(cnf);
+    solve_cdcl_from_state(&mut state)
 }
 
 #[cfg(test)]
