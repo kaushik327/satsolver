@@ -36,12 +36,11 @@ impl Clause {
         if num_unassigned_vars != 1 {
             return None;
         }
-        return self
-            .literals
+        self.literals
             .iter()
             .zip(assignments)
             .find(|(_, b)| b.is_none())
-            .map(|(lit, _)| lit.clone());
+            .map(|(lit, _)| lit.clone())
     }
 }
 
@@ -49,11 +48,12 @@ impl Clause {
 pub struct SolverState {
     pub formula: CnfFormula,
     pub assignment: Assignment,
+    pub trail: Vec<TrailElement>,
 }
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TrailReason {
-    Decision(SolverState),
+    Decision(Assignment),
     UnitProp(Clause),
 }
 
@@ -68,6 +68,7 @@ impl SolverState {
         Self {
             formula: cnf.clone(),
             assignment: Assignment::from_vector(vec![None; cnf.num_vars]),
+            trail: vec![],
         }
     }
 
@@ -94,10 +95,35 @@ impl SolverState {
             .any(|clause| clause.is_falsified(&self.assignment))
     }
 
-    pub fn assign(&self, var: &Var, value: Val) -> Self {
+    pub fn decide(&self, var: &Var, value: Val) -> Self {
+        let mut modified_trail = self.trail.clone();
+        modified_trail.push(TrailElement {
+            lit: Lit {
+                var: var.clone(),
+                value,
+            },
+            reason: TrailReason::Decision(self.assignment.clone()),
+        });
         Self {
             formula: self.formula.clone(),
             assignment: self.assignment.set(var, value),
+            trail: modified_trail,
+        }
+    }
+
+    pub fn assign_unitprop(&self, var: &Var, value: Val, clause: &Clause) -> Self {
+        let mut modified_trail = self.trail.clone();
+        modified_trail.push(TrailElement {
+            lit: Lit {
+                var: var.clone(),
+                value,
+            },
+            reason: TrailReason::UnitProp(clause.clone()),
+        });
+        Self {
+            formula: self.formula.clone(),
+            assignment: self.assignment.set(var, value),
+            trail: modified_trail,
         }
     }
 
@@ -111,6 +137,15 @@ impl SolverState {
 
     pub fn learn_clause(&mut self, lits: Vec<Lit>) {
         self.formula.clauses.push(Clause { literals: lits });
+    }
+
+    pub fn get_last_decision_index(&self) -> Option<usize> {
+        self.trail
+            .iter()
+            .enumerate()
+            .filter(|(_, x)| matches!(x.reason, TrailReason::Decision(_)))
+            .last()
+            .map(|(x, _)| x)
     }
 }
 
@@ -130,15 +165,15 @@ pub fn pure_literal_eliminate(state: &SolverState) -> SolverState {
     let mut new_state = state.clone();
     for (i, (pos, neg)) in seen_positive.into_iter().zip(seen_negative).enumerate() {
         if (pos, neg) == (true, false) {
-            new_state = new_state.assign(&Var { index: i + 1 }, Val::True);
+            new_state = new_state.decide(&Var { index: i + 1 }, Val::True);
         } else if (pos, neg) == (false, true) {
-            new_state = new_state.assign(&Var { index: i + 1 }, Val::False);
+            new_state = new_state.decide(&Var { index: i + 1 }, Val::False);
         }
     }
     new_state
 }
 
-pub fn unit_propagate(state: &SolverState) -> Option<(TrailElement, SolverState)> {
+pub fn unit_propagate(state: &SolverState) -> Option<SolverState> {
     // One round of unit propagation
     if state.is_satisfied() || state.is_falsified() {
         None
@@ -151,15 +186,7 @@ pub fn unit_propagate(state: &SolverState) -> Option<(TrailElement, SolverState)
             .find(|(_, maybe_lit)| maybe_lit.is_some())
             .map(|(clause, maybe_lit)| {
                 let Some(lit) = maybe_lit else { panic!() };
-                (
-                    TrailElement {
-                        lit: lit.clone(),
-                        reason: TrailReason::UnitProp(Clause {
-                            literals: clause.literals.clone(),
-                        }),
-                    },
-                    state.assign(&lit.var, lit.value),
-                )
+                state.assign_unitprop(&lit.var, lit.value, clause)
             })
     }
 }
@@ -188,12 +215,12 @@ mod tests {
         );
         let expected = parse_dimacs_str(b"\np cnf 5 2\n-2 0\n3 4 0").unwrap();
 
-        let Some((trail, post_ucp)) = unit_propagate(&pre_ucp) else {
+        let Some(post_ucp) = unit_propagate(&pre_ucp) else {
             panic!();
         };
 
         assert_eq!(
-            trail,
+            post_ucp.trail[0],
             TrailElement {
                 lit: Lit {
                     var: Var { index: 1 },

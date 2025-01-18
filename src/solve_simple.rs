@@ -21,8 +21,8 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
             None
         } else {
             state.assignment.get_unassigned_var().and_then(|v| {
-                solve_backtrack_rec(&state.assign(&v, Val::False))
-                    .or(solve_backtrack_rec(&state.assign(&v, Val::True)))
+                solve_backtrack_rec(&state.decide(&v, Val::False))
+                    .or(solve_backtrack_rec(&state.decide(&v, Val::True)))
             })
         }
     }
@@ -35,7 +35,7 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
     pub fn solve_dpll_rec(state: &SolverState) -> Option<Assignment> {
         let mut ucp_state = state.clone();
         while let Some(ucp_result) = unit_propagate(&ucp_state) {
-            (_, ucp_state) = ucp_result;
+            ucp_state = ucp_result;
         }
         if ucp_state.is_satisfied() {
             Some(ucp_state.assignment.fill_unassigned())
@@ -43,8 +43,8 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
             None
         } else {
             ucp_state.assignment.get_unassigned_var().and_then(|v| {
-                solve_dpll_rec(&state.assign(&v, Val::False))
-                    .or(solve_dpll_rec(&state.assign(&v, Val::True)))
+                solve_dpll_rec(&state.decide(&v, Val::False))
+                    .or(solve_dpll_rec(&state.decide(&v, Val::True)))
             })
         }
     }
