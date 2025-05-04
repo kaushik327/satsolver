@@ -18,9 +18,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
 
         match state.get_status() {
             Status::Satisfied => {
-                let mut assignment = state.assignment;
-                assignment.fill_unassigned();
-                let _ = tx.send(Some(assignment));
+                let _ = tx.send(Some(state.assignment.fill_unassigned()));
             }
             Status::Falsified => {
                 let _ = tx.send(None);

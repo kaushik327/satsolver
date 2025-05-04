@@ -13,12 +13,9 @@ pub fn solve_basic(cnf: &CnfFormula) -> Option<Assignment> {
 
 pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
-    pub fn solve_backtrack_rec(mut state: SolverState) -> Option<Assignment> {
+    pub fn solve_backtrack_rec(state: SolverState) -> Option<Assignment> {
         match state.get_status() {
-            Status::Satisfied => {
-                state.assignment.fill_unassigned();
-                Some(state.assignment)
-            }
+            Status::Satisfied => Some(state.assignment.fill_unassigned()),
             Status::Falsified => None,
             Status::Unassigned(lit) => {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
@@ -35,10 +32,7 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
     pub fn solve_dpll_rec(mut state: SolverState) -> Option<Assignment> {
         state.unit_propagate();
         match state.get_status() {
-            Status::Satisfied => {
-                state.assignment.fill_unassigned();
-                Some(state.assignment)
-            }
+            Status::Satisfied => Some(state.assignment.fill_unassigned()),
             Status::Falsified => None,
             Status::Unassigned(lit) => {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);

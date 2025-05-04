@@ -66,11 +66,16 @@ impl Assignment {
             .position(|v| v.is_none())
             .map(|n| Var { index: n + 1 })
     }
-    pub fn fill_unassigned(&mut self) {
-        self.assignment = self
-            .assignment
-            .iter()
-            .map(|v| v.or(Some(Val::False)))
-            .collect::<Vec<_>>();
+    pub fn fill_unassigned(self) -> Self {
+        Self {
+            assignment: self
+                .assignment
+                .iter()
+                .map(|v| v.or(Some(Val::False)))
+                .collect::<Vec<_>>(),
+        }
+    }
+    pub fn num_vars(&self) -> usize {
+        self.assignment.len()
     }
 }

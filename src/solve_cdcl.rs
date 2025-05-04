@@ -53,8 +53,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
                 // This is not implemented here.
             }
             Status::Satisfied => {
-                state.assignment.fill_unassigned();
-                return Some(state.assignment);
+                return Some(state.assignment.fill_unassigned());
             }
             Status::Unassigned(lit) => {
                 // Decide some random literal and add it to the trail.
