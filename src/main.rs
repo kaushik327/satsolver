@@ -6,7 +6,8 @@ mod solve_simple;
 mod solver_state;
 
 use clap::Parser;
-use std::io;
+use std::fs::File;
+use std::io::{stdin, stdout, BufReader, BufWriter, Read};
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -36,12 +37,18 @@ enum SolverOption {
 fn main() {
     let args = Args::parse();
 
-    let mut reader: io::BufReader<Box<dyn io::Read>> = if args.file == "-" {
-        io::BufReader::new(Box::new(io::stdin().lock()))
+    let reader: Box<dyn Read> = if args.file == "-" {
+        Box::new(stdin().lock())
     } else {
-        io::BufReader::new(Box::new(std::fs::File::open(&args.file).unwrap()))
+        Box::new(match File::open(&args.file) {
+            Ok(file) => file,
+            Err(e) => {
+                eprintln!("Failed to open file: {}", e);
+                std::process::exit(1);
+            }
+        })
     };
-    let cnf = parser::parse_dimacs(&mut reader).unwrap();
+    let cnf = parser::parse_dimacs(BufReader::new(reader)).unwrap();
 
     let start_time = Instant::now();
     let answer: Option<formula::Assignment> = match args.solver {
@@ -54,7 +61,7 @@ fn main() {
     let duration = start_time.elapsed();
 
     println!("c runtime: {:?}", duration);
-    parser::output_dimacs(&mut io::BufWriter::new(io::stdout()), &answer, cnf.num_vars).unwrap();
+    parser::output_dimacs(&mut BufWriter::new(stdout()), &answer, cnf.num_vars).unwrap();
 
     // We don't have proofs of unsatisfiability yet.
 
