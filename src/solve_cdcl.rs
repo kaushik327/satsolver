@@ -3,13 +3,11 @@ use std::collections::HashSet;
 use crate::formula::*;
 use crate::solver_state::*;
 
-pub fn solve_cdcl_from_state(state: &mut SolverState) -> Option<Assignment> {
+pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
     loop {
         // println!("\n{:?}", &state);
 
-        while let Some(ucp_result) = unit_propagate(state) {
-            *state = ucp_result;
-        }
+        while state.unit_propagate() == UnitPropStatus::UnitPropSuccess {}
 
         if state.is_falsified() {
             // We use the last UIP cut here (i.e. cutting right after the last decision literal)
@@ -22,10 +20,7 @@ pub fn solve_cdcl_from_state(state: &mut SolverState) -> Option<Assignment> {
             let after_cut = &state.trail[cut_idx + 1..];
 
             // Get all variables whose values have been decided or inferred before the cut.
-            let decided_before_cut = up_to_cut
-                .iter()
-                .map(|i| i.lit.var.clone())
-                .collect::<HashSet<_>>();
+            let decided_before_cut = up_to_cut.iter().map(|i| i.lit.var).collect::<HashSet<_>>();
 
             // Get all literals that were decided or inferred before the cut,
             // and were used to infer literals after the cut (and the contradiction).
@@ -55,21 +50,22 @@ pub fn solve_cdcl_from_state(state: &mut SolverState) -> Option<Assignment> {
             // decided multiple decisions beforehand, we can backjump even further.
             // This is not implemented here.
         } else if state.is_satisfied() {
-            return Some(state.assignment.fill_unassigned());
+            state.assignment.fill_unassigned();
+            return Some(state.assignment);
         } else {
             // Decide some random literal and add it to the trail.
             // Note: If the formula is neither falsified nor satisfied, there
             // must be at least one unassigned variable, hence the unwrap().
 
             let lit = state.get_unassigned_lit().unwrap();
-            *state = state.decide(&lit.var, lit.value);
+            state.decide(lit.var, lit.value);
         }
     }
 }
 
 pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
-    let mut state = SolverState::from_cnf(cnf);
-    solve_cdcl_from_state(&mut state)
+    let state = SolverState::from_cnf(cnf);
+    solve_cdcl_from_state(state)
 }
 
 #[cfg(test)]

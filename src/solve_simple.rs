@@ -14,43 +14,42 @@ pub fn solve_basic(cnf: &CnfFormula) -> Option<Assignment> {
 
 pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
-    pub fn solve_backtrack_rec(state: &SolverState) -> Option<Assignment> {
+    pub fn solve_backtrack_rec(mut state: SolverState) -> Option<Assignment> {
         if state.is_satisfied() {
-            Some(state.assignment.fill_unassigned())
+            state.assignment.fill_unassigned();
+            Some(state.assignment)
         } else if state.is_falsified() {
             None
         } else {
             state.assignment.get_unassigned_var().and_then(|v| {
-                solve_backtrack_rec(&state.decide(&v, Val::False))
-                    .or(solve_backtrack_rec(&state.decide(&v, Val::True)))
+                let (tstate, fstate) = branch_on_variable(state, v);
+                solve_backtrack_rec(fstate).or(solve_backtrack_rec(tstate))
             })
         }
     }
     let blank_state = SolverState::from_cnf(cnf);
-    solve_backtrack_rec(&blank_state)
+    solve_backtrack_rec(blank_state)
 }
 
 pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
-    pub fn solve_dpll_rec(state: &SolverState) -> Option<Assignment> {
-        let mut ucp_state = state.clone();
-        while let Some(ucp_result) = unit_propagate(&ucp_state) {
-            ucp_state = ucp_result;
-        }
-        if ucp_state.is_satisfied() {
-            Some(ucp_state.assignment.fill_unassigned())
-        } else if ucp_state.is_falsified() {
+    pub fn solve_dpll_rec(mut state: SolverState) -> Option<Assignment> {
+        while state.unit_propagate() == UnitPropStatus::UnitPropSuccess {}
+        if state.is_satisfied() {
+            state.assignment.fill_unassigned();
+            Some(state.assignment)
+        } else if state.is_falsified() {
             None
         } else {
-            ucp_state.assignment.get_unassigned_var().and_then(|v| {
-                solve_dpll_rec(&state.decide(&v, Val::False))
-                    .or(solve_dpll_rec(&state.decide(&v, Val::True)))
+            state.assignment.get_unassigned_var().and_then(|v| {
+                let (tstate, fstate) = branch_on_variable(state, v);
+                solve_dpll_rec(fstate).or(solve_dpll_rec(tstate))
             })
         }
     }
-    let blank_state = SolverState::from_cnf(cnf);
-    let ple_state = pure_literal_eliminate(&blank_state);
-    solve_dpll_rec(&ple_state)
+    let mut blank_state = SolverState::from_cnf(cnf);
+    blank_state.pure_literal_eliminate();
+    solve_dpll_rec(blank_state)
 }
 
 #[cfg(test)]

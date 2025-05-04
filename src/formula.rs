@@ -1,5 +1,5 @@
 // Defining the types of clauses, literals, and variables
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Var {
     pub index: usize,
 }
@@ -12,10 +12,9 @@ pub enum Val {
 
 impl Val {
     pub fn not(&self) -> Self {
-        if self == &Val::True {
-            Val::False
-        } else {
-            Val::True
+        match self {
+            Val::True => Val::False,
+            Val::False => Val::True,
         }
     }
 }
@@ -29,7 +28,7 @@ pub struct Lit {
 impl Lit {
     pub fn not(&self) -> Self {
         Lit {
-            var: self.var.clone(),
+            var: self.var,
             value: self.value.not(),
         }
     }
@@ -58,10 +57,8 @@ impl Assignment {
     pub fn get(&self, lit: &Lit) -> Option<bool> {
         self.assignment[lit.var.index - 1].map(|v| v == lit.value)
     }
-    pub fn set(&self, var: &Var, value: Val) -> Self {
-        let mut new_assignment = self.assignment.clone();
-        new_assignment[var.index - 1] = Some(value);
-        Self::from_vector(new_assignment)
+    pub fn set(&mut self, var: Var, value: Val) {
+        self.assignment[var.index - 1] = Some(value);
     }
     pub fn get_unassigned_var(&self) -> Option<Var> {
         self.assignment
@@ -69,12 +66,11 @@ impl Assignment {
             .position(|v| v.is_none())
             .map(|n| Var { index: n + 1 })
     }
-    pub fn fill_unassigned(&self) -> Self {
-        let new_assignment = self
+    pub fn fill_unassigned(&mut self) {
+        self.assignment = self
             .assignment
             .iter()
             .map(|v| v.or(Some(Val::False)))
             .collect::<Vec<_>>();
-        Self::from_vector(new_assignment)
     }
 }

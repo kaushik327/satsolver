@@ -5,41 +5,41 @@ use std::sync::mpsc;
 use std::thread;
 
 pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
-    pub fn solve_cnc_rec(state: &SolverState, depth: usize, tx: mpsc::Sender<Option<Assignment>>) {
-        let mut ucp_state = state.clone();
+    pub fn solve_cnc_rec(
+        mut state: SolverState,
+        depth: usize,
+        tx: mpsc::Sender<Option<Assignment>>,
+    ) {
+        while state.unit_propagate() == UnitPropStatus::UnitPropSuccess {}
 
-        while let Some(ucp_result) = unit_propagate(&ucp_state) {
-            ucp_state = ucp_result;
-        }
-
-        if ucp_state.is_satisfied() {
-            let _ = tx.send(Some(ucp_state.assignment.fill_unassigned()));
-        } else if ucp_state.is_falsified() {
+        if state.is_satisfied() {
+            let mut assignment = state.assignment;
+            assignment.fill_unassigned();
+            let _ = tx.send(Some(assignment));
+        } else if state.is_falsified() {
             let _ = tx.send(None);
         } else if depth > 0 {
-            let unassigned_var = ucp_state.assignment.get_unassigned_var().unwrap();
+            let unassigned_var = state.assignment.get_unassigned_var().unwrap();
 
-            let true_state = ucp_state.decide(&unassigned_var, Val::True);
-
-            let false_state = ucp_state.decide(&unassigned_var, Val::False);
+            let (tstate, fstate) = branch_on_variable(state, unassigned_var);
 
             let tx1 = tx.clone();
-            let tx2 = tx.clone();
+            let tx2 = tx;
 
-            thread::spawn(move || solve_cnc_rec(&true_state, depth - 1, tx1));
-            thread::spawn(move || solve_cnc_rec(&false_state, depth - 1, tx2));
+            thread::spawn(move || solve_cnc_rec(tstate, depth - 1, tx1));
+            thread::spawn(move || solve_cnc_rec(fstate, depth - 1, tx2));
         } else {
             thread::spawn(move || {
-                let _ = tx.send(solve_cdcl_from_state(&mut ucp_state));
+                let _ = tx.send(solve_cdcl_from_state(state));
             });
         }
     }
 
-    let blank_state = SolverState::from_cnf(cnf);
-    let ple_state = pure_literal_eliminate(&blank_state);
+    let mut blank_state = SolverState::from_cnf(cnf);
+    blank_state.pure_literal_eliminate();
 
     let (tx, rx) = mpsc::channel();
-    solve_cnc_rec(&ple_state, depth, tx);
+    solve_cnc_rec(blank_state, depth, tx);
 
     rx.recv().into_iter().find(|x| x.is_some()).flatten()
 }

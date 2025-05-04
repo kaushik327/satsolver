@@ -41,7 +41,11 @@ fn main() {
     parser::output_dimacs(&mut io::BufWriter::new(io::stdout()), &answer, cnf.num_vars).unwrap();
 
     // We don't have proofs of unsatisfiability yet.
-    assert!(answer.is_some_and(
-        |a| a.get_unassigned_var().is_none() && solver_state::check_assignment(&cnf, &a)
-    ));
+
+    if let Some(assignment) = answer {
+        assert!(
+            assignment.get_unassigned_var().is_none()
+                && solver_state::check_assignment(&cnf, &assignment)
+        );
+    }
 }
