@@ -4,17 +4,9 @@ use itertools::Itertools;
 use crate::formula::*;
 
 impl Clause {
-    pub fn is_satisfied(&self, a: &Assignment) -> bool {
-        self.literals.iter().any(|lit| a.get(lit) == Some(true))
-    }
-
-    pub fn is_falsified(&self, a: &Assignment) -> bool {
-        self.literals.iter().all(|lit| a.get(lit) == Some(false))
-    }
-
     #[cfg(test)]
     pub fn get_equivalent_clause(&self, a: &Assignment) -> Option<Vec<Lit>> {
-        if self.is_satisfied(a) {
+        if self.literals.iter().any(|lit| a.get(lit) == Some(true)) {
             return None;
         }
 
@@ -85,27 +77,23 @@ impl SolverState {
             .collect_vec()
     }
 
-    pub fn is_satisfied(&self) -> bool {
-        self.formula
-            .clauses
-            .iter()
-            .all(|clause| clause.is_satisfied(&self.assignment))
-    }
-    pub fn is_falsified(&self) -> bool {
-        self.formula
-            .clauses
-            .iter()
-            .any(|clause| clause.is_falsified(&self.assignment))
-    }
-
     pub fn get_status(&self) -> Status {
-        if self.is_satisfied() {
-            Status::Satisfied
-        } else if self.is_falsified() {
-            Status::Falsified
-        } else {
-            Status::Unassigned(self.get_unassigned_lit().unwrap())
+        'outer: for clause in self.formula.clauses.iter() {
+            let mut unassigned = None;
+            for lit in clause.literals.iter() {
+                match self.assignment.get(lit) {
+                    Some(false) => continue,
+                    Some(true) => continue 'outer,
+                    None => unassigned = Some(lit.clone()),
+                }
+            }
+            if let Some(lit) = unassigned {
+                return Status::Unassigned(lit);
+            } else {
+                return Status::Falsified;
+            }
         }
+        Status::Satisfied
     }
 
     pub fn decide(&mut self, var: Var, value: Val) {
@@ -122,15 +110,6 @@ impl SolverState {
             reason: TrailReason::UnitProp(clause),
         });
         self.assignment.set(var, value);
-    }
-
-    pub fn get_unassigned_lit(&self) -> Option<Lit> {
-        self.formula
-            .clauses
-            .iter()
-            .flat_map(|clause| clause.literals.iter())
-            .find(|lit| self.assignment.get(lit).is_none())
-            .cloned()
     }
 
     pub fn learn_clause(&mut self, lits: Vec<Lit>) {
@@ -177,7 +156,7 @@ impl SolverState {
     }
 
     pub fn unit_propagate(&mut self) {
-        while !self.is_satisfied() && !self.is_falsified() {
+        while let Status::Unassigned(_) = self.get_status() {
             if let Some((clause, lit)) = self.get_unit_literal() {
                 self.assign_unitprop(lit.var, lit.value, clause);
             } else {
