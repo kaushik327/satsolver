@@ -16,11 +16,17 @@ pub fn parse_dimacs(reader: impl io::BufRead) -> Result<CnfFormula, io::Error> {
             line.split_whitespace()
                 .map(str::to_owned)
                 .collect::<Vec<_>>()
-        });
+        })
+        .collect::<Vec<_>>();
+
+    // Some of these files end with "%" "0" for some reason, so remove them
+    if tokens.ends_with(&["%".into(), "0".into()]) {
+        tokens.truncate(tokens.len() - 2);
+    }
 
     // Parse header, num_vars, and expected_clauses in one go
     let (num_vars, expected_clauses) =
-        match (tokens.next(), tokens.next(), tokens.next(), tokens.next()) {
+        match (tokens.get(0), tokens.get(1), tokens.get(2), tokens.get(3)) {
             (Some(p), Some(cnf), Some(vars), Some(clauses)) if p == "p" && cnf == "cnf" => {
                 let num_vars = vars.parse::<usize>().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidData, "Invalid number of variables")
@@ -39,17 +45,15 @@ pub fn parse_dimacs(reader: impl io::BufRead) -> Result<CnfFormula, io::Error> {
         };
 
     // Split numeric tokens by zeros and turn into literals and clauses
-    let nums = tokens.map(|token| {
-        if let Ok(num) = token.parse::<isize>() {
-            if num.unsigned_abs() <= num_vars {
-                return Ok(num);
-            }
-        }
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Invalid literal",
-        ))
-    });
+    let nums = tokens[4..]
+        .iter()
+        .map(|token| match token.parse::<isize>() {
+            Ok(num) if num.unsigned_abs() <= num_vars => Ok(num),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid literal: {token}"),
+            )),
+        });
     let clauses = nums
         .chunk_by(|res| matches!(res, Ok(0)))
         .into_iter()
