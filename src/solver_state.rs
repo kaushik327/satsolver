@@ -1,3 +1,4 @@
+#[cfg(test)]
 use itertools::Itertools;
 
 use crate::formula::*;
@@ -27,19 +28,16 @@ impl Clause {
     }
 
     pub fn get_unit_literal(&self, a: &Assignment) -> Option<Lit> {
-        // TODO: this code is wasteful
-        let assignments = self.literals.iter().map(|lit| a.get(lit)).collect_vec();
-        if assignments.contains(&Some(true)) {
-            return None;
+        let mut unassigned_lit = None;
+        for lit in self.literals.iter() {
+            match (a.get(lit), &mut unassigned_lit) {
+                (Some(true), _) => return None, // Clause is satisfied; unit propagation not needed
+                (Some(false), _) => continue,   // Literal is false; keep searching
+                (None, Some(_)) => return None, // More than one literal is unassigned; not a unit clause
+                (None, None) => unassigned_lit = Some(lit.clone()), // Literal is unassigned; could be a unit clause
+            }
         }
-        let num_unassigned_vars = assignments.iter().filter(|b| b.is_none()).count();
-        if num_unassigned_vars != 1 {
-            return None;
-        }
-        self.literals
-            .iter()
-            .zip(assignments)
-            .find_map(|(lit, b)| b.is_none().then(|| lit.clone()))
+        unassigned_lit
     }
 }
 
