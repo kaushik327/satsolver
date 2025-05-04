@@ -4,10 +4,9 @@ use crate::formula::*;
 
 use itertools::Itertools;
 use std::io;
-use std::io::BufRead;
 use std::io::Write;
 
-pub fn parse_dimacs<R: io::Read>(reader: &mut io::BufReader<R>) -> Result<CnfFormula, io::Error> {
+pub fn parse_dimacs(reader: impl io::BufRead) -> Result<CnfFormula, io::Error> {
     // Split into non-comment lines and tokenize
     let mut tokens = reader
         .lines()

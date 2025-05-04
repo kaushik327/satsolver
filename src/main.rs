@@ -18,6 +18,10 @@ struct Args {
     /// Depth parameter for CNC solver
     #[arg(short, long, default_value_t = 3)]
     depth: usize,
+
+    /// Input file (use '-' to read from stdin)
+    #[arg(short, long)]
+    file: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -32,7 +36,11 @@ enum SolverOption {
 fn main() {
     let args = Args::parse();
 
-    let mut reader = io::BufReader::new(io::stdin());
+    let mut reader: io::BufReader<Box<dyn io::Read>> = if args.file == "-" {
+        io::BufReader::new(Box::new(io::stdin().lock()))
+    } else {
+        io::BufReader::new(Box::new(std::fs::File::open(&args.file).unwrap()))
+    };
     let cnf = parser::parse_dimacs(&mut reader).unwrap();
 
     let start_time = Instant::now();
