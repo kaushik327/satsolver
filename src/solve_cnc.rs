@@ -10,6 +10,10 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
         depth: usize,
         tx: mpsc::Sender<Option<Assignment>>,
     ) {
+        if depth == 0 {
+            let _ = tx.send(solve_cdcl_from_state(state));
+            return;
+        }
         state.unit_propagate();
 
         match state.get_status() {
@@ -21,16 +25,13 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
             Status::Falsified => {
                 let _ = tx.send(None);
             }
-            Status::Unassigned(lit) if depth > 0 => {
+            Status::Unassigned(lit) => {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 // Spawn new thread for one branch
                 let tx1 = tx.clone();
                 thread::spawn(move || solve_cnc_rec(tstate, depth - 1, tx1));
                 // Continue with current thread for the other branch
                 solve_cnc_rec(fstate, depth - 1, tx);
-            }
-            _ => {
-                let _ = tx.send(solve_cdcl_from_state(state));
             }
         }
     }
