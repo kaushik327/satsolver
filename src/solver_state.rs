@@ -121,7 +121,7 @@ impl SolverState {
             .iter()
             .enumerate()
             .filter(|(_, x)| matches!(x.reason, TrailReason::Decision(_)))
-            .last()
+            .next_back()
             .map(|(x, _)| x)
     }
 
