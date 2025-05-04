@@ -20,18 +20,14 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
             let _ = tx.send(None);
         } else if depth > 0 {
             let unassigned_var = state.assignment.get_unassigned_var().unwrap();
-
             let (tstate, fstate) = branch_on_variable(state, unassigned_var);
-
+            // Spawn new thread for one branch
             let tx1 = tx.clone();
-            let tx2 = tx;
-
             thread::spawn(move || solve_cnc_rec(tstate, depth - 1, tx1));
-            thread::spawn(move || solve_cnc_rec(fstate, depth - 1, tx2));
+            // Continue with current thread for the other branch
+            solve_cnc_rec(fstate, depth - 1, tx);
         } else {
-            thread::spawn(move || {
-                let _ = tx.send(solve_cdcl_from_state(state));
-            });
+            let _ = tx.send(solve_cdcl_from_state(state));
         }
     }
 
