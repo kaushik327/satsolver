@@ -42,7 +42,9 @@ pub struct SolverState {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TrailReason {
+    // At a decision, we snapshot the previous assignment so we can backjump to it if needed.
     Decision(Assignment),
+    // At unit propagation we save the clause that was used to infer the unit literal.
     UnitProp(Clause),
 }
 
@@ -116,13 +118,15 @@ impl SolverState {
         self.formula.clauses.push(Clause { literals: lits });
     }
 
-    pub fn get_last_decision_index(&self) -> Option<usize> {
+    pub fn get_last_decision_index(&self) -> Option<(usize, &Assignment)> {
         self.trail
             .iter()
             .enumerate()
-            .filter(|(_, x)| matches!(x.reason, TrailReason::Decision(_)))
+            .filter_map(|(idx, elem)| match &elem.reason {
+                TrailReason::Decision(snapshot) => Some((idx, snapshot)),
+                _ => None,
+            })
             .next_back()
-            .map(|(x, _)| x)
     }
 
     pub fn pure_literal_eliminate(&mut self) {
