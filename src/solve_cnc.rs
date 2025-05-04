@@ -12,22 +12,26 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     ) {
         state.unit_propagate();
 
-        if state.is_satisfied() {
-            let mut assignment = state.assignment;
-            assignment.fill_unassigned();
-            let _ = tx.send(Some(assignment));
-        } else if state.is_falsified() {
-            let _ = tx.send(None);
-        } else if depth > 0 {
-            let unassigned_var = state.assignment.get_unassigned_var().unwrap();
-            let (tstate, fstate) = branch_on_variable(state, unassigned_var);
-            // Spawn new thread for one branch
-            let tx1 = tx.clone();
-            thread::spawn(move || solve_cnc_rec(tstate, depth - 1, tx1));
-            // Continue with current thread for the other branch
-            solve_cnc_rec(fstate, depth - 1, tx);
-        } else {
-            let _ = tx.send(solve_cdcl_from_state(state));
+        match state.get_status() {
+            Status::Satisfied => {
+                let mut assignment = state.assignment;
+                assignment.fill_unassigned();
+                let _ = tx.send(Some(assignment));
+            }
+            Status::Falsified => {
+                let _ = tx.send(None);
+            }
+            Status::Unassigned(lit) if depth > 0 => {
+                let (tstate, fstate) = branch_on_variable(state, lit.var);
+                // Spawn new thread for one branch
+                let tx1 = tx.clone();
+                thread::spawn(move || solve_cnc_rec(tstate, depth - 1, tx1));
+                // Continue with current thread for the other branch
+                solve_cnc_rec(fstate, depth - 1, tx);
+            }
+            _ => {
+                let _ = tx.send(solve_cdcl_from_state(state));
+            }
         }
     }
 

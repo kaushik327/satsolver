@@ -9,56 +9,58 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
 
         state.unit_propagate();
 
-        if state.is_falsified() {
-            // We use the last UIP cut here (i.e. cutting right after the last decision literal)
-            let Some(cut_idx) = state.get_last_decision_index() else {
-                // If decision level zero, return unsat.
-                return None;
-            };
-            let cut_element = &state.trail[cut_idx];
-            let up_to_cut = &state.trail[0..=cut_idx];
-            let after_cut = &state.trail[cut_idx + 1..];
+        match state.get_status() {
+            Status::Falsified => {
+                // We use the last UIP cut here (i.e. cutting right after the last decision literal)
+                let Some(cut_idx) = state.get_last_decision_index() else {
+                    // If decision level zero, return unsat.
+                    return None;
+                };
+                let cut_element = &state.trail[cut_idx];
+                let up_to_cut = &state.trail[0..=cut_idx];
+                let after_cut = &state.trail[cut_idx + 1..];
 
-            // Get all variables whose values have been decided or inferred before the cut.
-            let decided_before_cut = up_to_cut.iter().map(|i| i.lit.var).collect::<HashSet<_>>();
+                // Get all variables whose values have been decided or inferred before the cut.
+                let decided_before_cut =
+                    up_to_cut.iter().map(|i| i.lit.var).collect::<HashSet<_>>();
 
-            // Get all literals that were decided or inferred before the cut,
-            // and were used to infer literals after the cut (and the contradiction).
-            // The negations of these literals are put into the learned clause.
-            let lits_in_learned_clause = after_cut
-                .iter()
-                .flat_map(|i| match &i.reason {
-                    TrailReason::UnitProp(clause) => clause
-                        .literals
-                        .iter()
-                        .filter(|lit| decided_before_cut.contains(&lit.var)),
-                    _ => panic!(),
-                })
-                .map(|lit| lit.not())
-                .collect::<HashSet<_>>();
+                // Get all literals that were decided or inferred before the cut,
+                // and were used to infer literals after the cut (and the contradiction).
+                // The negations of these literals are put into the learned clause.
+                let lits_in_learned_clause = after_cut
+                    .iter()
+                    .flat_map(|i| match &i.reason {
+                        TrailReason::UnitProp(clause) => clause
+                            .literals
+                            .iter()
+                            .filter(|lit| decided_before_cut.contains(&lit.var)),
+                        _ => panic!(),
+                    })
+                    .map(|lit| lit.not())
+                    .collect::<HashSet<_>>();
 
-            // Backjumping to snapshotted state
-            state.assignment = match &cut_element.reason {
-                TrailReason::UnitProp(_) => panic!(),
-                TrailReason::Decision(assignment) => assignment.clone(),
-            };
-            state.trail.truncate(cut_idx);
+                // Backjumping to snapshotted state
+                state.assignment = match &cut_element.reason {
+                    TrailReason::UnitProp(_) => panic!(),
+                    TrailReason::Decision(assignment) => assignment.clone(),
+                };
+                state.trail.truncate(cut_idx);
 
-            state.learn_clause(Vec::from_iter(lits_in_learned_clause));
+                state.learn_clause(Vec::from_iter(lits_in_learned_clause));
 
-            // TODO: If the elements in the learned clause are all literals that were
-            // decided multiple decisions beforehand, we can backjump even further.
-            // This is not implemented here.
-        } else if state.is_satisfied() {
-            state.assignment.fill_unassigned();
-            return Some(state.assignment);
-        } else {
-            // Decide some random literal and add it to the trail.
-            // Note: If the formula is neither falsified nor satisfied, there
-            // must be at least one unassigned variable, hence the unwrap().
+                // TODO: If the elements in the learned clause are all literals that were
+                // decided multiple decisions beforehand, we can backjump even further.
+                // This is not implemented here.
+            }
+            Status::Satisfied => {
+                state.assignment.fill_unassigned();
+                return Some(state.assignment);
+            }
+            Status::Unassigned(lit) => {
+                // Decide some random literal and add it to the trail.
 
-            let lit = state.get_unassigned_lit().unwrap();
-            state.decide(lit.var, lit.value);
+                state.decide(lit.var, lit.value);
+            }
         }
     }
 }

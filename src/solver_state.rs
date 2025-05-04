@@ -60,6 +60,12 @@ pub struct TrailElement {
     pub reason: TrailReason,
 }
 
+pub enum Status {
+    Satisfied,
+    Falsified,
+    Unassigned(Lit),
+}
+
 impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
         Self {
@@ -90,6 +96,16 @@ impl SolverState {
             .clauses
             .iter()
             .any(|clause| clause.is_falsified(&self.assignment))
+    }
+
+    pub fn get_status(&self) -> Status {
+        if self.is_satisfied() {
+            Status::Satisfied
+        } else if self.is_falsified() {
+            Status::Falsified
+        } else {
+            Status::Unassigned(self.get_unassigned_lit().unwrap())
+        }
     }
 
     pub fn decide(&mut self, var: Var, value: Val) {

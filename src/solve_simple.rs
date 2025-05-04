@@ -15,16 +15,16 @@ pub fn solve_basic(cnf: &CnfFormula) -> Option<Assignment> {
 pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
     pub fn solve_backtrack_rec(mut state: SolverState) -> Option<Assignment> {
-        if state.is_satisfied() {
-            state.assignment.fill_unassigned();
-            Some(state.assignment)
-        } else if state.is_falsified() {
-            None
-        } else {
-            state.assignment.get_unassigned_var().and_then(|v| {
-                let (tstate, fstate) = branch_on_variable(state, v);
+        match state.get_status() {
+            Status::Satisfied => {
+                state.assignment.fill_unassigned();
+                Some(state.assignment)
+            }
+            Status::Falsified => None,
+            Status::Unassigned(lit) => {
+                let (tstate, fstate) = branch_on_variable(state, lit.var);
                 solve_backtrack_rec(fstate).or(solve_backtrack_rec(tstate))
-            })
+            }
         }
     }
     let blank_state = SolverState::from_cnf(cnf);
@@ -35,16 +35,16 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
     pub fn solve_dpll_rec(mut state: SolverState) -> Option<Assignment> {
         state.unit_propagate();
-        if state.is_satisfied() {
-            state.assignment.fill_unassigned();
-            Some(state.assignment)
-        } else if state.is_falsified() {
-            None
-        } else {
-            state.assignment.get_unassigned_var().and_then(|v| {
-                let (tstate, fstate) = branch_on_variable(state, v);
+        match state.get_status() {
+            Status::Satisfied => {
+                state.assignment.fill_unassigned();
+                Some(state.assignment)
+            }
+            Status::Falsified => None,
+            Status::Unassigned(lit) => {
+                let (tstate, fstate) = branch_on_variable(state, lit.var);
                 solve_dpll_rec(fstate).or(solve_dpll_rec(tstate))
-            })
+            }
         }
     }
     let mut blank_state = SolverState::from_cnf(cnf);
