@@ -7,7 +7,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
     loop {
         // println!("\n{:?}", &state);
 
-        while state.unit_propagate() == UnitPropStatus::UnitPropSuccess {}
+        state.unit_propagate();
 
         if state.is_falsified() {
             // We use the last UIP cut here (i.e. cutting right after the last decision literal)

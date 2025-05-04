@@ -34,7 +34,7 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
 pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
     // Recursively assign each variable to true or false
     pub fn solve_dpll_rec(mut state: SolverState) -> Option<Assignment> {
-        while state.unit_propagate() == UnitPropStatus::UnitPropSuccess {}
+        state.unit_propagate();
         if state.is_satisfied() {
             state.assignment.fill_unassigned();
             Some(state.assignment)

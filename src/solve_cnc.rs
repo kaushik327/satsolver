@@ -10,7 +10,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
         depth: usize,
         tx: mpsc::Sender<Option<Assignment>>,
     ) {
-        while state.unit_propagate() == UnitPropStatus::UnitPropSuccess {}
+        state.unit_propagate();
 
         if state.is_satisfied() {
             let mut assignment = state.assignment;

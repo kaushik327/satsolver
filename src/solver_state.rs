@@ -62,12 +62,6 @@ pub struct TrailElement {
     pub reason: TrailReason,
 }
 
-#[derive(PartialEq)]
-pub enum UnitPropStatus {
-    UnitPropSuccess,
-    UnitPropFailure,
-}
-
 impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
         Self {
@@ -168,16 +162,13 @@ impl SolverState {
         })
     }
 
-    pub fn unit_propagate(&mut self) -> UnitPropStatus {
-        // One round of unit propagation
-        if self.is_satisfied() || self.is_falsified() {
-            return UnitPropStatus::UnitPropFailure;
-        }
-        if let Some((clause, lit)) = self.get_unit_literal() {
-            self.assign_unitprop(lit.var, lit.value, clause);
-            UnitPropStatus::UnitPropSuccess
-        } else {
-            UnitPropStatus::UnitPropFailure
+    pub fn unit_propagate(&mut self) {
+        while !self.is_satisfied() && !self.is_falsified() {
+            if let Some((clause, lit)) = self.get_unit_literal() {
+                self.assign_unitprop(lit.var, lit.value, clause);
+            } else {
+                break;
+            }
         }
     }
 }
@@ -212,24 +203,44 @@ mod tests {
         let mut ucp = SolverState::from_cnf(
             &parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n-1 -2 0\n1 0\n3 4 0").unwrap(),
         );
-        let expected = parse_dimacs_str(b"\np cnf 5 2\n-2 0\n3 4 0").unwrap();
+        let expected = parse_dimacs_str(b"\np cnf 5 1\n3 4 0").unwrap();
 
-        assert!(ucp.unit_propagate() == UnitPropStatus::UnitPropSuccess);
+        ucp.unit_propagate();
 
         assert_eq!(
-            ucp.trail[0],
-            TrailElement {
-                lit: Lit {
-                    var: Var { index: 1 },
-                    value: Val::True,
-                },
-                reason: TrailReason::UnitProp(Clause {
-                    literals: vec![Lit {
+            ucp.trail,
+            [
+                TrailElement {
+                    lit: Lit {
                         var: Var { index: 1 },
-                        value: Val::True,
-                    }],
-                }),
-            }
+                        value: Val::True
+                    },
+                    reason: TrailReason::UnitProp(Clause {
+                        literals: vec![Lit {
+                            var: Var { index: 1 },
+                            value: Val::True
+                        }]
+                    })
+                },
+                TrailElement {
+                    lit: Lit {
+                        var: Var { index: 2 },
+                        value: Val::False
+                    },
+                    reason: TrailReason::UnitProp(Clause {
+                        literals: vec![
+                            Lit {
+                                var: Var { index: 1 },
+                                value: Val::False
+                            },
+                            Lit {
+                                var: Var { index: 2 },
+                                value: Val::False
+                            }
+                        ]
+                    })
+                }
+            ]
         );
 
         assert_eq!(ucp.get_equivalent_clauses(), expected.clauses);
