@@ -26,7 +26,7 @@ pub fn parse_dimacs(reader: impl io::BufRead) -> Result<CnfFormula, io::Error> {
 
     // Parse header, num_vars, and expected_clauses in one go
     let (num_vars, expected_clauses) =
-        match (tokens.get(0), tokens.get(1), tokens.get(2), tokens.get(3)) {
+        match (tokens.first(), tokens.get(1), tokens.get(2), tokens.get(3)) {
             (Some(p), Some(cnf), Some(vars), Some(clauses)) if p == "p" && cnf == "cnf" => {
                 let num_vars = vars.parse::<usize>().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidData, "Invalid number of variables")
@@ -111,6 +111,8 @@ pub fn output_dimacs<W: io::Write>(
             }
             writer.write_all(format!("{}", i).as_bytes())?;
         }
+    } else {
+        writer.write_all(b"s UNSATISFIABLE")?;
     }
     writer.write_all(b"\n")?;
     Ok(())

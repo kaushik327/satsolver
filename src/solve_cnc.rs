@@ -2,45 +2,76 @@ use crate::formula::*;
 use crate::solve_cdcl::*;
 use crate::solver_state::*;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 
 pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
-    pub fn solve_cnc_rec(
+    // Create a recursive function that returns a vector of thread handles
+    fn solve_cnc_rec(
         mut state: SolverState,
         depth: usize,
-        tx: mpsc::Sender<Option<Assignment>>,
-    ) {
+        tx: Arc<mpsc::Sender<Option<Assignment>>>,
+    ) -> Vec<thread::JoinHandle<()>> {
         if depth == 0 {
-            let _ = tx.send(solve_cdcl_from_state(state));
-            return;
+            // Base case: use CDCL solver
+            let result = solve_cdcl_from_state(state);
+            let _ = tx.send(result);
+            return vec![];
         }
         state.unit_propagate();
-
         match state.get_status() {
             Status::Satisfied => {
+                // Found a satisfying assignment
                 let _ = tx.send(Some(state.assignment.fill_unassigned()));
+                vec![]
             }
             Status::Falsified => {
+                // This branch is unsatisfiable
                 let _ = tx.send(None);
+                vec![]
             }
             Status::Unassigned(lit) => {
+                // Branch on the unassigned literal
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
-                // Spawn new thread for one branch
-                let tx1 = tx.clone();
-                thread::spawn(move || solve_cnc_rec(tstate, depth - 1, tx1));
-                // Continue with current thread for the other branch
-                solve_cnc_rec(fstate, depth - 1, tx);
+                let mut handles = Vec::new();
+                for new_state in [tstate, fstate] {
+                    let tx_new = Arc::clone(&tx);
+                    let handle_new = thread::spawn(move || {
+                        // Recursively create threads and collect their handles
+                        let nested_handles = solve_cnc_rec(new_state, depth - 1, tx_new);
+                        // Join all nested threads
+                        for handle in nested_handles {
+                            handle.join().expect("Thread panicked");
+                        }
+                    });
+                    handles.push(handle_new);
+                }
+                handles
             }
         }
     }
 
+    // Initialize solver state
     let mut blank_state = SolverState::from_cnf(cnf);
     blank_state.pure_literal_eliminate();
 
+    // Set up communication channel
     let (tx, rx) = mpsc::channel();
-    solve_cnc_rec(blank_state, depth, tx);
+    let tx = Arc::new(tx);
 
-    rx.recv().into_iter().find(|x| x.is_some()).flatten()
+    // Start recursive solving process
+    let handles = solve_cnc_rec(blank_state, depth, tx.clone());
+
+    // Join all top-level threads
+    for handle in handles {
+        handle.join().expect("Thread panicked");
+    }
+
+    // Drop the sender to close the channel
+    drop(tx);
+
+    // Collect and process results
+    rx.iter().flatten().next()
 }
 
 #[cfg(test)]

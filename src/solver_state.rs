@@ -114,8 +114,8 @@ impl SolverState {
         self.assignment.set(var, value);
     }
 
-    pub fn learn_clause(&mut self, lits: Vec<Lit>) {
-        self.formula.clauses.push(Clause { literals: lits });
+    pub fn learn_clause(&mut self, clause: Clause) {
+        self.formula.clauses.push(clause);
     }
 
     pub fn get_last_decision_index(&self) -> Option<(usize, &Assignment)> {
