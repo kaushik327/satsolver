@@ -15,6 +15,9 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
                 state.decide(lit.var, lit.value);
             }
             Status::Falsified => {
+                // TODO: store decision levels in the trail and use them to find more optimal
+                // cuts and backjumps
+
                 // We use the last UIP cut here (i.e. cutting right after the last decision literal)
                 let Some((cut_idx, snapshot)) = state.get_last_decision_index() else {
                     // If decision level zero, return unsat.
@@ -49,10 +52,6 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
                 state.learn_clause(Clause {
                     literals: Vec::from_iter(lits_in_learned_clause),
                 });
-
-                // TODO: If the elements in the learned clause are all literals that were
-                // decided multiple decisions beforehand, we can backjump even further.
-                // This is not implemented here.
             }
         }
     }
