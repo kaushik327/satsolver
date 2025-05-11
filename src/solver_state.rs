@@ -3,20 +3,39 @@ use itertools::Itertools;
 
 use crate::formula::*;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Record {
+    value: Val,
+    decision_level: u32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
-    assignment: Vec<Option<Val>>,
+    assignment: Vec<Option<Record>>,
 }
 
 impl Assignment {
     pub fn from_vector(assignment: Vec<Option<Val>>) -> Self {
-        Self { assignment }
+        Self {
+            assignment: assignment
+                .iter()
+                .map(|v| {
+                    v.map(|v| Record {
+                        value: v,
+                        decision_level: 0,
+                    })
+                })
+                .collect(),
+        }
     }
     pub fn get(&self, lit: &Lit) -> Option<bool> {
-        self.assignment[lit.var.index - 1].map(|v| v == lit.value)
+        self.assignment[lit.var.index - 1].map(|v| v.value == lit.value)
     }
-    pub fn set(&mut self, var: Var, value: Val) {
-        self.assignment[var.index - 1] = Some(value);
+    pub fn set(&mut self, var: Var, value: Val, decision_level: u32) {
+        self.assignment[var.index - 1] = Some(Record {
+            value,
+            decision_level,
+        });
     }
     pub fn get_unassigned_var(&self) -> Option<Var> {
         self.assignment
@@ -29,7 +48,12 @@ impl Assignment {
             assignment: self
                 .assignment
                 .iter()
-                .map(|v| v.or(Some(Val::False)))
+                .map(|v| {
+                    v.or(Some(Record {
+                        value: Val::False,
+                        decision_level: u32::MAX,
+                    }))
+                })
                 .collect::<Vec<_>>(),
         }
     }
@@ -37,7 +61,6 @@ impl Assignment {
         self.assignment.len()
     }
 }
-
 
 impl Clause {
     #[cfg(test)]
@@ -142,7 +165,7 @@ impl SolverState {
             lit: Lit { var, value },
             reason: TrailReason::Decision(self.assignment.clone()),
         });
-        self.assignment.set(var, value);
+        self.assignment.set(var, value, self.decision_level);
     }
 
     pub fn assign_unitprop(&mut self, var: Var, value: Val, clause: Clause) {
@@ -150,7 +173,7 @@ impl SolverState {
             lit: Lit { var, value },
             reason: TrailReason::UnitProp(clause),
         });
-        self.assignment.set(var, value);
+        self.assignment.set(var, value, self.decision_level);
     }
 
     pub fn learn_clause(&mut self, clause: Clause) {
