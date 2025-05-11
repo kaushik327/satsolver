@@ -38,6 +38,7 @@ pub struct SolverState {
     pub formula: CnfFormula,
     pub assignment: Assignment,
     pub trail: Vec<TrailElement>,
+    pub decision_level: u32,
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -66,6 +67,7 @@ impl SolverState {
             formula: cnf.clone(),
             assignment: Assignment::from_vector(vec![None; cnf.num_vars]),
             trail: vec![],
+            decision_level: 0,
         }
     }
 
@@ -99,6 +101,7 @@ impl SolverState {
     }
 
     pub fn decide(&mut self, var: Var, value: Val) {
+        self.decision_level += 1;
         self.trail.push(TrailElement {
             lit: Lit { var, value },
             reason: TrailReason::Decision(self.assignment.clone()),
