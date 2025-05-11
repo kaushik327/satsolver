@@ -5,6 +5,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
+#[allow(dead_code)]
 pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     // Create a recursive function that returns a vector of thread handles
     fn solve_cnc_rec(

@@ -27,7 +27,6 @@ struct Args {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum SolverOption {
-    Cnc,
     Cdcl,
     Dpll,
     Backtrack,
@@ -52,7 +51,6 @@ fn main() {
 
     let start_time = Instant::now();
     let answer: Option<formula::Assignment> = match args.solver {
-        SolverOption::Cnc => solve_cnc::solve_cnc(&cnf, args.depth),
         SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
         SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
         SolverOption::Backtrack => solve_simple::solve_backtrack(&cnf),
