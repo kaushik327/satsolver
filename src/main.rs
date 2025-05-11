@@ -50,7 +50,7 @@ fn main() {
     let cnf = parser::parse_dimacs(BufReader::new(reader)).unwrap();
 
     let start_time = Instant::now();
-    let answer: Option<formula::Assignment> = match args.solver {
+    let answer: Option<solver_state::Assignment> = match args.solver {
         SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
         SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
         SolverOption::Backtrack => solve_simple::solve_backtrack(&cnf),

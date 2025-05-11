@@ -1,6 +1,7 @@
 // DIMACS CNF parser.
 
 use crate::formula::*;
+use crate::solver_state::*;
 
 use itertools::Itertools;
 use std::io;
