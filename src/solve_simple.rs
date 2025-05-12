@@ -1,14 +1,9 @@
 use crate::formula::*;
 use crate::solver_state::*;
 
-use itertools::Itertools;
-
 pub fn solve_basic(cnf: &CnfFormula) -> Option<Assignment> {
     // Literally iterate through every possible assignment.
-    std::iter::repeat_n([Some(Val::False), Some(Val::True)], cnf.num_vars)
-        .multi_cartesian_product()
-        .map(|v| Assignment::from_vector(v.to_vec()))
-        .find(|assignment| check_assignment(cnf, assignment))
+    Assignment::every_possible(cnf.num_vars).find(|assignment| check_assignment(cnf, assignment))
 }
 
 pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {

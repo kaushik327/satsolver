@@ -1,4 +1,3 @@
-#[cfg(test)]
 use itertools::Itertools;
 
 use crate::formula::*;
@@ -15,17 +14,9 @@ pub struct Assignment {
 }
 
 impl Assignment {
-    pub fn from_vector(assignment: Vec<Option<Val>>) -> Self {
+    pub fn empty(num_vars: usize) -> Self {
         Self {
-            assignment: assignment
-                .iter()
-                .map(|v| {
-                    v.map(|v| Record {
-                        value: v,
-                        decision_level: 0,
-                    })
-                })
-                .collect(),
+            assignment: vec![None; num_vars],
         }
     }
     pub fn get(&self, lit: &Lit) -> Option<bool> {
@@ -59,6 +50,25 @@ impl Assignment {
     }
     pub fn num_vars(&self) -> usize {
         self.assignment.len()
+    }
+    pub fn every_possible(num_vars: usize) -> impl Iterator<Item = Self> {
+        std::iter::repeat_n(
+            [
+                Some(Record {
+                    value: Val::False,
+                    decision_level: 0,
+                }),
+                Some(Record {
+                    value: Val::True,
+                    decision_level: 0,
+                }),
+            ],
+            num_vars,
+        )
+        .multi_cartesian_product()
+        .map(|v| Self {
+            assignment: v.to_vec(),
+        })
     }
 }
 
@@ -124,7 +134,7 @@ impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
         Self {
             formula: cnf.clone(),
-            assignment: Assignment::from_vector(vec![None; cnf.num_vars]),
+            assignment: Assignment::empty(cnf.num_vars),
             trail: vec![],
             decision_level: 0,
         }
