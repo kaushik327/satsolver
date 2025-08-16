@@ -126,7 +126,7 @@ pub struct TrailElement {
 
 pub enum Status {
     Satisfied,
-    Falsified,
+    Falsified(#[allow(dead_code)] Clause),
     Unassigned(Lit),
 }
 
@@ -163,7 +163,7 @@ impl SolverState {
             if let Some(lit) = unassigned {
                 return Status::Unassigned(lit);
             } else {
-                return Status::Falsified;
+                return Status::Falsified(clause.clone());
             }
         }
         Status::Satisfied

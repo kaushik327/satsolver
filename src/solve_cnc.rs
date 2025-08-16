@@ -26,7 +26,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
                 let _ = tx.send(Some(state.assignment.fill_unassigned()));
                 vec![]
             }
-            Status::Falsified => {
+            Status::Falsified(_) => {
                 // This branch is unsatisfiable
                 let _ = tx.send(None);
                 vec![]

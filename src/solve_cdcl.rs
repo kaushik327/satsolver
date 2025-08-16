@@ -14,7 +14,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
                 // Decide some unassigned literal and add it to the trail.
                 state.decide(lit.var, lit.value);
             }
-            Status::Falsified => {
+            Status::Falsified(_) => {
                 // TODO: store decision levels in the trail and use them to find more optimal
                 // cuts and backjumps
 
