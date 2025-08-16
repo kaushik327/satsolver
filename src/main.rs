@@ -42,7 +42,7 @@ fn main() {
         Box::new(match File::open(&args.file) {
             Ok(file) => file,
             Err(e) => {
-                eprintln!("Failed to open file: {}", e);
+                eprintln!("Failed to open file: {e}");
                 std::process::exit(1);
             }
         })
@@ -58,7 +58,7 @@ fn main() {
     };
     let duration = start_time.elapsed();
 
-    println!("c runtime: {:?}", duration);
+    println!("c runtime: {duration:?}");
     parser::output_dimacs(&mut BufWriter::new(stdout()), &answer).unwrap();
 
     // We don't have proofs of unsatisfiability yet.

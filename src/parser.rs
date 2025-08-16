@@ -110,7 +110,7 @@ pub fn output_dimacs<W: io::Write>(
             if !satisfied {
                 writer.write_all(b"-")?;
             }
-            writer.write_all(format!("{}", i).as_bytes())?;
+            writer.write_all(format!("{i}").as_bytes())?;
         }
     } else {
         writer.write_all(b"s UNSATISFIABLE")?;
