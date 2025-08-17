@@ -126,6 +126,16 @@ pub struct SolverState {
     pub decision_level: u32,
 }
 
+impl std::fmt::Display for SolverState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Assignment: {}\nFormula: {}",
+            self.assignment, self.formula
+        )
+    }
+}
+
 #[derive(PartialEq, Clone, Debug)]
 pub enum TrailReason {
     // At a decision, we snapshot the previous assignment so we can backjump to it if needed.
