@@ -7,10 +7,10 @@ use crate::solver_state::*;
 
 pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignment> {
     eprintln!("Initial formula: {}", state.formula);
+    eprintln!("Initial trail: {}", state.trail.iter().join(" "));
     loop {
-        eprintln!("Before unit propagation: {}", state.assignment);
         state.unit_propagate();
-        eprintln!("After unit propagation: {}", state.assignment);
+        eprintln!("Unit propagation: {}", state.trail.iter().join(" "));
         match state.get_status() {
             Status::Satisfied => {
                 return Some(state.assignment.fill_unassigned());
@@ -18,7 +18,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             Status::Unassigned(lit) => {
                 // Decide some unassigned literal and add it to the trail.
                 state.decide(lit.var, lit.value);
-                eprintln!("After decision: {}", state.assignment);
+                eprintln!("Decision: {}", state.trail.iter().join(" "));
             }
             Status::Falsified(falsified_clause) => {
                 // We start with the cut placed after all unit propagations,
@@ -34,15 +34,10 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     falsified_clause.literals.into_iter().map(|lit| lit.not()),
                 );
 
-                eprintln!("Initial left-of-cut lits: {}", left_of_cut.iter().join(","));
-
-                eprintln!(
-                    "Trail: {}",
-                    state.trail.iter().map(|te| te.lit.clone()).join(",")
-                );
+                eprintln!("Trail: {}", state.trail.iter().join(" "));
 
                 for trail_element in state.trail.iter().rev() {
-                    eprintln!("Trail element: {trail_element:?}");
+                    eprintln!("\tLeft of cut: {}", left_of_cut.iter().join(" "));
 
                     // Check the decision levels of the learned clause's literals.
                     let decision_levels = Vec::from_iter(
@@ -51,7 +46,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                             .map(|lit| state.assignment.get_decision_level(lit).unwrap()),
                     );
 
-                    eprintln!("Decision levels: {}", decision_levels.iter().join(","));
+                    eprintln!("\tDecision levels: {}", decision_levels.iter().join(" "));
 
                     let current_level_count = decision_levels
                         .iter()
@@ -64,7 +59,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                         let learned_clause = Clause {
                             literals: left_of_cut.into_iter().map(|lit| lit.not()).collect(),
                         };
-                        eprintln!("Learned clause: {learned_clause}");
+                        eprintln!("\tLearned clause: {learned_clause}");
                         state.learn_clause(learned_clause);
 
                         // Get the second-largest decision level and backjump to it
@@ -79,12 +74,14 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                         };
 
                         eprintln!(
-                            "Backjumping from level {} to level {}",
+                            "\tBackjumping from level {} to level {}",
                             state.decision_level, backjump_level
                         );
                         state.backjump_to_decision_level(backjump_level);
                         break;
                     }
+
+                    eprintln!("\tTrail element: {trail_element:?}");
 
                     // Move the cut from the right to the left of this trail element.
                     // That involves removing this element's literal from the learned
@@ -100,14 +97,10 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                                 }
                             }
                         }
+                        // We should never be moving the UIP cut behind the last decision level.
                         _ => unreachable!(),
                     }
                     left_of_cut.remove(&trail_element.lit);
-
-                    eprintln!(
-                        "Left-of-cut lits after move: {}",
-                        left_of_cut.iter().join(",")
-                    );
                 }
             }
         }

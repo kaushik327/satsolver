@@ -153,6 +153,15 @@ pub struct TrailElement {
     pub reason: TrailReason,
 }
 
+impl std::fmt::Display for TrailElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.reason {
+            TrailReason::Decision(_) => write!(f, "{}(D)", self.lit),
+            TrailReason::UnitProp(_) => write!(f, "{}(U)", self.lit),
+        }
+    }
+}
+
 pub enum Status {
     Satisfied,
     Falsified(Clause),
