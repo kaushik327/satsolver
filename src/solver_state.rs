@@ -72,6 +72,22 @@ impl Assignment {
     }
 }
 
+impl std::fmt::Display for Assignment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}]",
+            self.assignment
+                .iter()
+                .enumerate()
+                .filter_map(|(i, v)| {
+                    v.map(|v| format!("x{}={}(d{})", i + 1, v.value, v.decision_level))
+                })
+                .join(", ")
+        )
+    }
+}
+
 impl Clause {
     #[cfg(test)]
     pub fn get_equivalent_clause(&self, a: &Assignment) -> Option<Vec<Lit>> {
