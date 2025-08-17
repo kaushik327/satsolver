@@ -1,6 +1,7 @@
 mod formula;
 mod parser;
 mod solve_cdcl;
+mod solve_cdcl_first_uip;
 mod solve_cnc;
 mod solve_simple;
 mod solver_state;
@@ -28,6 +29,7 @@ struct Args {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum SolverOption {
     Cdcl,
+    CdclFirstUip,
     Dpll,
     Backtrack,
     Basic,
@@ -52,6 +54,7 @@ fn main() {
     let start_time = Instant::now();
     let answer: Option<solver_state::Assignment> = match args.solver {
         SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
+        SolverOption::CdclFirstUip => solve_cdcl_first_uip::solve_cdcl_first_uip(&cnf),
         SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
         SolverOption::Backtrack => solve_simple::solve_backtrack(&cnf),
         SolverOption::Basic => solve_simple::solve_basic(&cnf),

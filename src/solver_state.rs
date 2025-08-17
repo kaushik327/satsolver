@@ -22,6 +22,9 @@ impl Assignment {
     pub fn get(&self, lit: &Lit) -> Option<bool> {
         self.assignment[lit.var.index - 1].map(|v| v.value == lit.value)
     }
+    pub fn get_decision_level(&self, lit: &Lit) -> Option<u32> {
+        self.assignment[lit.var.index - 1].map(|v| v.decision_level)
+    }
     pub fn set(&mut self, var: Var, value: Val, decision_level: u32) {
         self.assignment[var.index - 1] = Some(Record {
             value,
@@ -152,7 +155,7 @@ pub struct TrailElement {
 
 pub enum Status {
     Satisfied,
-    Falsified(#[allow(dead_code)] Clause),
+    Falsified(Clause),
     Unassigned(Lit),
 }
 
@@ -229,6 +232,24 @@ impl SolverState {
                 _ => None,
             })
             .next_back()
+    }
+
+    pub fn backjump_to_decision_level(&mut self, decision_level: u32) {
+        let (cut_idx, snapshot) = self
+            .trail
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(idx, elem)| match &elem.reason {
+                TrailReason::Decision(snapshot) => Some((idx, snapshot.clone())),
+                _ => None,
+            })
+            .nth(decision_level as usize)
+            .unwrap_or((0, Assignment::empty(self.formula.num_vars)));
+
+        self.trail.truncate(cut_idx);
+        self.decision_level = decision_level;
+        self.assignment = snapshot;
     }
 
     pub fn pure_literal_eliminate(&mut self) {
