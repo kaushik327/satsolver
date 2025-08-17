@@ -151,20 +151,24 @@ impl SolverState {
     }
 
     pub fn get_status(&self) -> Status {
+        let mut unassigned = None;
         'outer: for clause in self.formula.clauses.iter() {
-            let mut unassigned = None;
+            let mut unassigned_in_clause = None;
             for lit in clause.literals.iter() {
                 match self.assignment.get(lit) {
                     Some(false) => continue,
                     Some(true) => continue 'outer,
-                    None => unassigned = Some(lit.clone()),
+                    None => unassigned_in_clause = Some(lit.clone()),
                 }
             }
-            if let Some(lit) = unassigned {
-                return Status::Unassigned(lit);
+            if let Some(lit) = unassigned_in_clause {
+                unassigned = Some(lit);
             } else {
                 return Status::Falsified(clause.clone());
             }
+        }
+        if let Some(lit) = unassigned {
+            return Status::Unassigned(lit);
         }
         Status::Satisfied
     }
