@@ -6,10 +6,11 @@ use crate::formula::*;
 use crate::solver_state::*;
 
 pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignment> {
+    eprintln!("Initial formula: {}", state.formula);
     loop {
-        eprintln!("Before unit propagation: {state}");
+        eprintln!("Before unit propagation: {}", state.assignment);
         state.unit_propagate();
-        eprintln!("After unit propagation: {state}");
+        eprintln!("After unit propagation: {}", state.assignment);
         match state.get_status() {
             Status::Satisfied => {
                 return Some(state.assignment.fill_unassigned());
@@ -17,7 +18,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             Status::Unassigned(lit) => {
                 // Decide some unassigned literal and add it to the trail.
                 state.decide(lit.var, lit.value);
-                eprintln!("After decision: {state}");
+                eprintln!("After decision: {}", state.assignment);
             }
             Status::Falsified(falsified_clause) => {
                 // We start with the cut placed after all unit propagations,
@@ -41,38 +42,16 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 );
 
                 for trail_element in state.trail.iter().rev() {
-                    // Move the cut from the right to the left of this trail element.
-                    // That involves removing this element's literal from the learned
-                    // clause (if it is present), but adding the literals that were used to infer this
-                    // element (if they are not already present).
-
                     eprintln!("Trail element: {trail_element:?}");
 
-                    match &trail_element.reason {
-                        TrailReason::UnitProp(clause) => {
-                            for lit in clause.literals.iter() {
-                                if lit.var == trail_element.lit.var {
-                                    assert!(lit.value == trail_element.lit.value);
-                                } else {
-                                    left_of_cut.insert(lit.not());
-                                }
-                            }
-                        }
-                        _ => unreachable!(),
-                    }
-                    assert!(left_of_cut.remove(&trail_element.lit));
-
-                    eprintln!(
-                        "Left-of-cut lits after move: {}",
-                        left_of_cut.iter().join(",")
-                    );
-
                     // Check the decision levels of the learned clause's literals.
-                    let decision_levels = HashSet::<u32>::from_iter(
+                    let decision_levels = Vec::from_iter(
                         left_of_cut
                             .iter()
                             .map(|lit| state.assignment.get_decision_level(lit).unwrap()),
                     );
+
+                    eprintln!("Decision levels: {}", decision_levels.iter().join(","));
 
                     let current_level_count = decision_levels
                         .iter()
@@ -85,6 +64,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                         let learned_clause = Clause {
                             literals: left_of_cut.into_iter().map(|lit| lit.not()).collect(),
                         };
+                        eprintln!("Learned clause: {learned_clause}");
                         state.learn_clause(learned_clause);
 
                         // Get the second-largest decision level and backjump to it
@@ -98,11 +78,37 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                             0
                         };
 
+                        eprintln!(
+                            "Backjumping from level {} to level {}",
+                            state.decision_level, backjump_level
+                        );
                         state.backjump_to_decision_level(backjump_level);
                         break;
                     }
+
+                    // Move the cut from the right to the left of this trail element.
+                    // That involves removing this element's literal from the learned
+                    // clause (if it is present), but adding the literals that were used to infer this
+                    // element (if they are not already present).
+                    match &trail_element.reason {
+                        TrailReason::UnitProp(clause) => {
+                            for lit in clause.literals.iter() {
+                                if lit.var == trail_element.lit.var {
+                                    assert!(lit.value == trail_element.lit.value);
+                                } else {
+                                    left_of_cut.insert(lit.not());
+                                }
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                    left_of_cut.remove(&trail_element.lit);
+
+                    eprintln!(
+                        "Left-of-cut lits after move: {}",
+                        left_of_cut.iter().join(",")
+                    );
                 }
-                eprintln!("After backjump: {state}");
             }
         }
     }
