@@ -285,21 +285,6 @@ impl SolverState {
             }
         }
     }
-
-    pub fn unit_propagate(&mut self) {
-        loop {
-            match self.get_status() {
-                Status::UnassignedUnit(lit, clause) => {
-                    // Unit propagation available
-                    self.assign_unitprop(lit.var, lit.value, clause);
-                }
-                _ => {
-                    // No unit propagation available, stop
-                    break;
-                }
-            }
-        }
-    }
 }
 
 pub fn branch_on_variable(state: SolverState, var: Var) -> (SolverState, SolverState) {
@@ -334,7 +319,9 @@ mod tests {
         );
         let expected = parse_dimacs_str(b"\np cnf 5 1\n3 4 0").unwrap();
 
-        ucp.unit_propagate();
+        while let Status::UnassignedUnit(lit, clause) = ucp.get_status() {
+            ucp.assign_unitprop(lit.var, lit.value, clause);
+        }
 
         assert_eq!(
             ucp.trail,

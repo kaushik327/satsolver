@@ -20,7 +20,6 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
             let _ = tx.send(result);
             return vec![];
         }
-        state.unit_propagate();
         match state.get_status() {
             Status::Satisfied => {
                 // Found a satisfying assignment
@@ -50,7 +49,10 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
                 }
                 handles
             }
-            Status::UnassignedUnit(_, _) => unreachable!(),
+            Status::UnassignedUnit(lit, clause) => {
+                state.assign_unitprop(lit.var, lit.value, clause);
+                solve_cnc_rec(state, depth, tx)
+            }
         }
     }
 

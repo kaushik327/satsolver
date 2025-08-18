@@ -5,7 +5,6 @@ use crate::solver_state::*;
 
 pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
     loop {
-        state.unit_propagate();
         match state.get_status() {
             Status::Satisfied => {
                 return Some(state.assignment.fill_unassigned());
@@ -14,7 +13,9 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
                 // Decide some unassigned literal and add it to the trail.
                 state.decide(lit.var, lit.value);
             }
-            Status::UnassignedUnit(_, _) => unreachable!(),
+            Status::UnassignedUnit(lit, clause) => {
+                state.assign_unitprop(lit.var, lit.value, clause);
+            }
             Status::Falsified(_) => {
                 // TODO: store decision levels in the trail and use them to find more optimal
                 // cuts and backjumps

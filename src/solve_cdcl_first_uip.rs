@@ -9,8 +9,6 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
     eprintln!("Initial formula: {}", state.formula);
     eprintln!("Initial trail: {}", state.trail.iter().join(" "));
     loop {
-        state.unit_propagate();
-        eprintln!("Unit propagation: {}", state.trail.iter().join(" "));
         match state.get_status() {
             Status::Satisfied => {
                 return Some(state.assignment.fill_unassigned());
@@ -20,7 +18,10 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 state.decide(lit.var, lit.value);
                 eprintln!("Decision: {}", state.trail.iter().join(" "));
             }
-            Status::UnassignedUnit(_, _) => unreachable!(),
+            Status::UnassignedUnit(lit, clause) => {
+                state.assign_unitprop(lit.var, lit.value, clause);
+                eprintln!("Unit propagation: {}", state.trail.iter().join(" "));
+            }
             Status::Falsified(falsified_clause) => {
                 // We start with the cut placed after all unit propagations,
                 // and incrementally move it backwards until the ensuing
