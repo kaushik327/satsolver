@@ -14,12 +14,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             }
             Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
-                eprintln!("Decision: {}", lit);
+                eprintln!("Decision: {lit}");
                 state.decide(lit.var, lit.value);
             }
             Status::UnassignedUnit(lit, clause) => {
                 // Unit-clause propagation available
-                eprintln!("Unit clause: {} from {}", lit, clause);
+                eprintln!("Unit clause: {lit} from {clause}");
                 state.assign_unitprop(lit.var, lit.value, clause);
             }
             Status::Falsified(falsified_clause) => {
@@ -28,12 +28,17 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 // learned clause would contain exactly one literal from
                 // the current decision level.
 
-                eprintln!("Falsified {} at trail: {}", falsified_clause, state.trail.iter().join(" "));
+                eprintln!(
+                    "Falsified {} at trail: {}",
+                    falsified_clause,
+                    state.trail.iter().join(" ")
+                );
 
                 if state.decision_level == 0 {
                     return None;
                 }
 
+                // TODO: HashSet leads to nondeterministic behavior, annoying to debug
                 let mut left_of_cut = HashSet::<Lit>::from_iter(
                     falsified_clause.literals.into_iter().map(|lit| lit.not()),
                 );
@@ -45,6 +50,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                             .iter()
                             .map(|lit| (lit, state.assignment.get_decision_level(lit).unwrap())),
                     );
+                    // TODO: we should not need to repeatedly query the assignment for info that should be in the trail
 
                     eprintln!(
                         "\tLeft of cut: {}",
