@@ -6,7 +6,7 @@ use crate::formula::*;
 use crate::solver_state::*;
 
 struct LiteralsLeftOfCut<'a> {
-    literals: BTreeSet<(Lit, u32)>,
+    literals: BTreeSet<(u32, Lit)>,
     state: &'a SolverState,
 }
 
@@ -15,8 +15,8 @@ impl<'a> LiteralsLeftOfCut<'a> {
         Self {
             literals: BTreeSet::from_iter(falsified_clause.literals.into_iter().map(|lit| {
                 (
-                    lit.not(),
                     state.assignment.get_decision_level(&lit).unwrap(),
+                    lit.not(),
                 )
             })),
             state,
@@ -24,38 +24,37 @@ impl<'a> LiteralsLeftOfCut<'a> {
     }
 
     fn get_backjump_level(&self) -> u32 {
-        let mut decision_levels = self
+        let decision_levels = self
             .literals
             .iter()
-            .map(|(_, level)| *level)
+            .map(|(level, _)| *level)
             .collect::<Vec<_>>();
-        decision_levels.sort_unstable();
+        assert!(decision_levels.is_sorted());
 
         let n_lits = decision_levels.len();
         assert!(n_lits > 0 && decision_levels[n_lits - 1] == self.state.decision_level);
-        let backjump_level = if n_lits == 1 {
+
+        if n_lits == 1 {
             0
         } else {
             decision_levels[n_lits - 2]
-        };
-
-        backjump_level
+        }
     }
 
     fn get_learned_clause(&self) -> Clause {
         Clause {
-            literals: self.literals.iter().map(|(lit, _)| lit.not()).collect(),
+            literals: self.literals.iter().map(|(_, lit)| lit.not()).collect(),
         }
     }
 
     fn insert(&mut self, lit: Lit) {
         self.literals
-            .insert((lit, self.state.assignment.get_decision_level(&lit).unwrap()));
+            .insert((self.state.assignment.get_decision_level(&lit).unwrap(), lit));
     }
 
     fn remove(&mut self, lit: Lit) {
         self.literals
-            .remove(&(lit, self.state.assignment.get_decision_level(&lit).unwrap()));
+            .remove(&(self.state.assignment.get_decision_level(&lit).unwrap(), lit));
     }
 
     fn update(&mut self, trail_element: &TrailElement) {
@@ -64,9 +63,7 @@ impl<'a> LiteralsLeftOfCut<'a> {
             unreachable!();
         };
 
-        eprintln!(
-            "\tJumping past trail element: {trail_element} from {clause}"
-        );
+        eprintln!("\tJumping past trail element: {trail_element} from {clause}");
 
         for lit in clause.literals.iter() {
             if lit.var == trail_element.lit.var {
