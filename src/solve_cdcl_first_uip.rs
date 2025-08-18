@@ -12,15 +12,14 @@ struct LiteralsLeftOfCut<'a> {
 
 impl<'a> LiteralsLeftOfCut<'a> {
     fn new(falsified_clause: Clause, state: &'a SolverState) -> Self {
-        Self {
-            literals: BTreeSet::from_iter(falsified_clause.literals.into_iter().map(|lit| {
-                (
-                    state.assignment.get_decision_level(&lit).unwrap(),
-                    lit.not(),
-                )
-            })),
+        let mut ret = Self {
+            literals: BTreeSet::new(),
             state,
+        };
+        for lit in &falsified_clause.literals {
+            ret.insert(lit.not());
         }
+        ret
     }
 
     fn get_backjump_level(&self) -> u32 {
