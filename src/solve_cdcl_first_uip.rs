@@ -53,33 +53,22 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                             .join(" ")
                     );
 
-                    let decision_levels = left_of_cut
+                    let mut decision_levels = left_of_cut
                         .iter()
                         .map(|(_, level)| level.clone())
                         .collect::<Vec<_>>();
+                    decision_levels.sort_unstable();
 
-                    let current_level_count = decision_levels
-                        .iter()
-                        .filter(|&&level| level == state.decision_level)
-                        .count();
-                    assert!(current_level_count > 0);
-                    if current_level_count == 1 {
+                    let n_lits = decision_levels.len();
+                    assert!(n_lits > 0 && decision_levels[n_lits - 1] == state.decision_level);
+                    let backjump_level = if n_lits == 1 { 0 } else { decision_levels[n_lits - 2] };
+
+                    if backjump_level != state.decision_level {
                         // We have found a UIP cut.
 
                         // Add the learned clause to the state
                         let learned_clause = Clause {
                             literals: left_of_cut.iter().map(|(lit, _)| lit.not()).collect(),
-                        };
-
-                        // Get the second-largest decision level and backjump to it
-                        let mut sorted_levels: Vec<u32> = decision_levels.into_iter().collect();
-                        sorted_levels.sort_unstable();
-                        sorted_levels.reverse();
-
-                        let backjump_level = if sorted_levels.len() > 1 {
-                            sorted_levels[1]
-                        } else {
-                            0
                         };
 
                         eprintln!(
