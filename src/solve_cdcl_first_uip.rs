@@ -24,21 +24,14 @@ impl<'a> LiteralsLeftOfCut<'a> {
     }
 
     fn get_backjump_level(&self) -> u32 {
-        let decision_levels = self
-            .literals
-            .iter()
-            .map(|(level, _)| *level)
-            .collect::<Vec<_>>();
-        assert!(decision_levels.is_sorted());
+        let mut decision_levels = self.literals.iter().map(|(level, _)| *level);
 
-        let n_lits = decision_levels.len();
-        assert!(n_lits > 0 && decision_levels[n_lits - 1] == self.state.decision_level);
+        // Get the last (highest) decision level
+        let last_level = decision_levels.next_back().unwrap();
+        assert_eq!(last_level, self.state.decision_level);
 
-        if n_lits == 1 {
-            0
-        } else {
-            decision_levels[n_lits - 2]
-        }
+        // Get the second-to-last decision level, or 0 if none exists
+        decision_levels.next_back().unwrap_or(0)
     }
 
     fn get_learned_clause(&self) -> Clause {
@@ -83,7 +76,7 @@ impl std::fmt::Display for LiteralsLeftOfCut<'_> {
             "{}",
             self.literals
                 .iter()
-                .map(|(lit, level)| format!("{lit}({level})"))
+                .map(|(level, lit)| format!("{lit}({level})"))
                 .join(" ")
         )
     }
@@ -98,12 +91,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             }
             Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
-                eprintln!("Decision: {lit}");
+                eprintln!("Guess:\t{lit}");
                 state.decide(lit.var, lit.value);
             }
             Status::UnassignedUnit(lit, clause) => {
                 // Unit-clause propagation available
-                eprintln!("Unit clause: {lit} from {clause}");
+                eprintln!("Unit:\t{lit} from {clause}");
                 state.assign_unitprop(lit.var, lit.value, clause);
             }
             Status::Falsified(falsified_clause) => {
