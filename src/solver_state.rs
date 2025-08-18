@@ -189,7 +189,7 @@ impl SolverState {
                     Some(false) => continue,
                     Some(true) => continue 'outer,
                     None => {
-                        unassigned_in_clause = Some(lit.clone());
+                        unassigned_in_clause = Some(*lit);
                         unassigned_count += 1;
                     }
                 }
@@ -198,9 +198,9 @@ impl SolverState {
             if let Some(lit) = unassigned_in_clause {
                 if unassigned_count == 1 {
                     // This is a unit clause - prioritize it
-                    unassigned_unit = Some((lit.clone(), clause.clone()));
+                    unassigned_unit = Some((lit, clause.clone()));
                 }
-                unassigned = Some(lit.clone());
+                unassigned = Some(lit);
             } else {
                 return Status::Falsified(clause.clone());
             }

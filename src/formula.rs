@@ -30,7 +30,7 @@ impl std::fmt::Display for Val {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Lit {
     pub var: Var,
     pub value: Val,
