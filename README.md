@@ -5,5 +5,11 @@ This is a Rust-based SAT solver using CDCL (conflict-driven clause learning).
 ## Usage
 
 ```bash
-$ cargo run -- --solver cdcl-first-uip --file examples/example4.cnf
+cargo run -- --solver dpll --dimacs-output examples/example2.cnf
+```
+
+```bash
+mkdir examples/aim
+wget -qO- https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT/DIMACS/AIM/aim.tar.gz | tar xvf - -C examples/aim
+cargo run examples/aim/* 2> /dev/null
 ```
