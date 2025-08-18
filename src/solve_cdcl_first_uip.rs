@@ -5,6 +5,74 @@ use itertools::Itertools;
 use crate::formula::*;
 use crate::solver_state::*;
 
+struct LiteralsLeftOfCut<'a> {
+    literals: HashSet<(Lit, u32)>,
+    state: &'a SolverState,
+}
+
+impl<'a> LiteralsLeftOfCut<'a> {
+    fn new(falsified_clause: Clause, state: &'a SolverState) -> Self {
+        Self {
+            // TODO: HashSet leads to nondeterministic behavior, annoying to debug
+            literals: HashSet::from_iter(falsified_clause.literals.into_iter().map(|lit| {
+                (
+                    lit.not(),
+                    state.assignment.get_decision_level(&lit).unwrap(),
+                )
+            })),
+            state,
+        }
+    }
+
+    fn get_backjump_level(&self) -> u32 {
+        let mut decision_levels = self
+            .literals
+            .iter()
+            .map(|(_, level)| *level)
+            .collect::<Vec<_>>();
+        decision_levels.sort_unstable();
+
+        let n_lits = decision_levels.len();
+        assert!(n_lits > 0 && decision_levels[n_lits - 1] == self.state.decision_level);
+        let backjump_level = if n_lits == 1 {
+            0
+        } else {
+            decision_levels[n_lits - 2]
+        };
+
+        backjump_level
+    }
+
+    fn get_learned_clause(&self) -> Clause {
+        Clause {
+            literals: self.literals.iter().map(|(lit, _)| lit.not()).collect(),
+        }
+    }
+
+    fn insert(&mut self, lit: Lit) {
+        self.literals
+            .insert((lit, self.state.assignment.get_decision_level(&lit).unwrap()));
+    }
+
+    fn remove(&mut self, lit: Lit) {
+        self.literals
+            .remove(&(lit, self.state.assignment.get_decision_level(&lit).unwrap()));
+    }
+}
+
+impl std::fmt::Display for LiteralsLeftOfCut<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.literals
+                .iter()
+                .map(|(lit, level)| format!("{lit}({level})"))
+                .join(" ")
+        )
+    }
+}
+
 pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignment> {
     eprintln!("Initial formula: {}", state.formula);
     loop {
@@ -38,47 +106,19 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     return None;
                 }
 
-                // TODO: HashSet leads to nondeterministic behavior, annoying to debug
-                let mut left_of_cut = HashSet::<(Lit, u32)>::from_iter(
-                    falsified_clause.literals.into_iter().map(|lit| {
-                        (
-                            lit.not(),
-                            state.assignment.get_decision_level(&lit).unwrap(),
-                        )
-                    }),
-                );
+                let mut left_of_cut = LiteralsLeftOfCut::new(falsified_clause, &state);
 
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
-                    eprintln!(
-                        "\tLeft of cut: {}",
-                        left_of_cut
-                            .iter()
-                            .map(|(lit, level)| format!("{lit}({level})"))
-                            .join(" ")
-                    );
+                    eprintln!("\tLeft of cut: {left_of_cut}");
 
-                    let mut decision_levels = left_of_cut
-                        .iter()
-                        .map(|(_, level)| *level)
-                        .collect::<Vec<_>>();
-                    decision_levels.sort_unstable();
-
-                    let n_lits = decision_levels.len();
-                    assert!(n_lits > 0 && decision_levels[n_lits - 1] == state.decision_level);
-                    let backjump_level = if n_lits == 1 {
-                        0
-                    } else {
-                        decision_levels[n_lits - 2]
-                    };
+                    let backjump_level = left_of_cut.get_backjump_level();
 
                     if backjump_level != state.decision_level {
                         // We have found a UIP cut.
 
                         // Add the learned clause to the state
-                        let learned_clause = Clause {
-                            literals: left_of_cut.iter().map(|(lit, _)| lit.not()).collect(),
-                        };
+                        let learned_clause = left_of_cut.get_learned_clause();
 
                         eprintln!(
                             "\tBackjumping from level {} to level {}, learning clause {}",
@@ -102,23 +142,14 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                                 if lit.var == trail_element.lit.var {
                                     assert!(lit.value == trail_element.lit.value);
                                 } else {
-                                    left_of_cut.insert((
-                                        lit.not(),
-                                        state.assignment.get_decision_level(lit).unwrap(),
-                                    ));
+                                    left_of_cut.insert(lit.not());
                                 }
                             }
                         }
                         // We should never be moving the UIP cut behind the last decision level.
                         _ => unreachable!(),
                     }
-                    left_of_cut.remove(&(
-                        trail_element.lit,
-                        state
-                            .assignment
-                            .get_decision_level(&trail_element.lit)
-                            .unwrap(),
-                    ));
+                    left_of_cut.remove(trail_element.lit);
                 }
             }
         }
