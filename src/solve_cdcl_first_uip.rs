@@ -40,7 +40,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
 
                 // TODO: HashSet leads to nondeterministic behavior, annoying to debug
                 let mut left_of_cut = HashSet::<(Lit, u32)>::from_iter(
-                    falsified_clause.literals.into_iter().map(|lit| (lit.not(), state.assignment.get_decision_level(&lit).unwrap())),
+                    falsified_clause.literals.into_iter().map(|lit| {
+                        (
+                            lit.not(),
+                            state.assignment.get_decision_level(&lit).unwrap(),
+                        )
+                    }),
                 );
 
                 for trail_element in state.trail.iter().rev() {
@@ -55,13 +60,17 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
 
                     let mut decision_levels = left_of_cut
                         .iter()
-                        .map(|(_, level)| level.clone())
+                        .map(|(_, level)| *level)
                         .collect::<Vec<_>>();
                     decision_levels.sort_unstable();
 
                     let n_lits = decision_levels.len();
                     assert!(n_lits > 0 && decision_levels[n_lits - 1] == state.decision_level);
-                    let backjump_level = if n_lits == 1 { 0 } else { decision_levels[n_lits - 2] };
+                    let backjump_level = if n_lits == 1 {
+                        0
+                    } else {
+                        decision_levels[n_lits - 2]
+                    };
 
                     if backjump_level != state.decision_level {
                         // We have found a UIP cut.
@@ -93,14 +102,23 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                                 if lit.var == trail_element.lit.var {
                                     assert!(lit.value == trail_element.lit.value);
                                 } else {
-                                    left_of_cut.insert((lit.not(), state.assignment.get_decision_level(&lit).unwrap()));
+                                    left_of_cut.insert((
+                                        lit.not(),
+                                        state.assignment.get_decision_level(lit).unwrap(),
+                                    ));
                                 }
                             }
                         }
                         // We should never be moving the UIP cut behind the last decision level.
                         _ => unreachable!(),
                     }
-                    left_of_cut.remove(&(trail_element.lit.clone(), state.assignment.get_decision_level(&trail_element.lit).unwrap()));
+                    left_of_cut.remove(&(
+                        trail_element.lit,
+                        state
+                            .assignment
+                            .get_decision_level(&trail_element.lit)
+                            .unwrap(),
+                    ));
                 }
             }
         }
