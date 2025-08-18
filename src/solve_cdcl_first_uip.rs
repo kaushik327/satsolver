@@ -58,6 +58,26 @@ impl<'a> LiteralsLeftOfCut<'a> {
         self.literals
             .remove(&(lit, self.state.assignment.get_decision_level(&lit).unwrap()));
     }
+
+    fn update(&mut self, trail_element: &TrailElement) {
+        let TrailReason::UnitProp(clause) = &trail_element.reason else {
+            // We should never be moving the UIP cut behind the last decision level.
+            unreachable!();
+        };
+
+        eprintln!(
+            "\tJumping past trail element: {trail_element} from {clause}"
+        );
+
+        for lit in clause.literals.iter() {
+            if lit.var == trail_element.lit.var {
+                assert!(lit.value == trail_element.lit.value);
+            } else {
+                self.insert(lit.not());
+            }
+        }
+        self.remove(trail_element.lit);
+    }
 }
 
 impl std::fmt::Display for LiteralsLeftOfCut<'_> {
@@ -111,15 +131,10 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
                     eprintln!("\tLeft of cut: {left_of_cut}");
-
                     let backjump_level = left_of_cut.get_backjump_level();
-
                     if backjump_level != state.decision_level {
                         // We have found a UIP cut.
-
-                        // Add the learned clause to the state
                         let learned_clause = left_of_cut.get_learned_clause();
-
                         eprintln!(
                             "\tBackjumping from level {} to level {}, learning clause {}",
                             state.decision_level, backjump_level, learned_clause
@@ -133,23 +148,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     // That involves removing this element's literal from the learned
                     // clause (if it is present), but adding the literals that were used to infer this
                     // element (if they are not already present).
-                    match &trail_element.reason {
-                        TrailReason::UnitProp(clause) => {
-                            eprintln!(
-                                "\tJumping past trail element: {trail_element} from {clause}"
-                            );
-                            for lit in clause.literals.iter() {
-                                if lit.var == trail_element.lit.var {
-                                    assert!(lit.value == trail_element.lit.value);
-                                } else {
-                                    left_of_cut.insert(lit.not());
-                                }
-                            }
-                        }
-                        // We should never be moving the UIP cut behind the last decision level.
-                        _ => unreachable!(),
-                    }
-                    left_of_cut.remove(trail_element.lit);
+                    left_of_cut.update(trail_element);
                 }
             }
         }
