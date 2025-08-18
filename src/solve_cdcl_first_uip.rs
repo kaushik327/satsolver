@@ -7,7 +7,6 @@ use crate::solver_state::*;
 
 pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignment> {
     eprintln!("Initial formula: {}", state.formula);
-    eprintln!("Initial trail: {}", state.trail.iter().join(" "));
     loop {
         match state.get_status() {
             Status::Satisfied => {
@@ -15,18 +14,21 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             }
             Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
+                eprintln!("Decision: {}", lit);
                 state.decide(lit.var, lit.value);
-                eprintln!("Decision: {}", state.trail.iter().join(" "));
             }
             Status::UnassignedUnit(lit, clause) => {
+                // Unit-clause propagation available
+                eprintln!("Unit clause: {} from {}", lit, clause);
                 state.assign_unitprop(lit.var, lit.value, clause);
-                eprintln!("Unit propagation: {}", state.trail.iter().join(" "));
             }
             Status::Falsified(falsified_clause) => {
                 // We start with the cut placed after all unit propagations,
                 // and incrementally move it backwards until the ensuing
                 // learned clause would contain exactly one literal from
                 // the current decision level.
+
+                eprintln!("Falsified {} at trail: {}", falsified_clause, state.trail.iter().join(" "));
 
                 if state.decision_level == 0 {
                     return None;
@@ -35,8 +37,6 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 let mut left_of_cut = HashSet::<Lit>::from_iter(
                     falsified_clause.literals.into_iter().map(|lit| lit.not()),
                 );
-
-                eprintln!("Trail: {}", state.trail.iter().join(" "));
 
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
