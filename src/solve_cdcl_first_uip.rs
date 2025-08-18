@@ -39,30 +39,23 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 }
 
                 // TODO: HashSet leads to nondeterministic behavior, annoying to debug
-                let mut left_of_cut = HashSet::<Lit>::from_iter(
-                    falsified_clause.literals.into_iter().map(|lit| lit.not()),
+                let mut left_of_cut = HashSet::<(Lit, u32)>::from_iter(
+                    falsified_clause.literals.into_iter().map(|lit| (lit.not(), state.assignment.get_decision_level(&lit).unwrap())),
                 );
 
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
-                    let lits_and_decision_levels = Vec::from_iter(
-                        left_of_cut
-                            .iter()
-                            .map(|lit| (lit, state.assignment.get_decision_level(lit).unwrap())),
-                    );
-                    // TODO: we should not need to repeatedly query the assignment for info that should be in the trail
-
                     eprintln!(
                         "\tLeft of cut: {}",
-                        lits_and_decision_levels
+                        left_of_cut
                             .iter()
                             .map(|(lit, level)| format!("{lit}({level})"))
                             .join(" ")
                     );
 
-                    let decision_levels = lits_and_decision_levels
-                        .into_iter()
-                        .map(|(_, level)| level)
+                    let decision_levels = left_of_cut
+                        .iter()
+                        .map(|(_, level)| level.clone())
                         .collect::<Vec<_>>();
 
                     let current_level_count = decision_levels
@@ -75,7 +68,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
 
                         // Add the learned clause to the state
                         let learned_clause = Clause {
-                            literals: left_of_cut.into_iter().map(|lit| lit.not()).collect(),
+                            literals: left_of_cut.iter().map(|(lit, _)| lit.not()).collect(),
                         };
 
                         // Get the second-largest decision level and backjump to it
@@ -111,14 +104,14 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                                 if lit.var == trail_element.lit.var {
                                     assert!(lit.value == trail_element.lit.value);
                                 } else {
-                                    left_of_cut.insert(lit.not());
+                                    left_of_cut.insert((lit.not(), state.assignment.get_decision_level(&lit).unwrap()));
                                 }
                             }
                         }
                         // We should never be moving the UIP cut behind the last decision level.
                         _ => unreachable!(),
                     }
-                    left_of_cut.remove(&trail_element.lit);
+                    left_of_cut.remove(&(trail_element.lit.clone(), state.assignment.get_decision_level(&trail_element.lit).unwrap()));
                 }
             }
         }
