@@ -14,7 +14,7 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "cdcl-first-uip")]
     solver: SolverOption,
 
     /// Depth parameter for CNC solver
