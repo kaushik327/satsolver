@@ -106,19 +106,6 @@ impl Clause {
                 .collect_vec(),
         )
     }
-
-    pub fn get_unit_literal(&self, a: &Assignment) -> Option<Lit> {
-        let mut unassigned_lit = None;
-        for lit in self.literals.iter() {
-            match (a.get(lit), &mut unassigned_lit) {
-                (Some(true), _) => return None, // Clause is satisfied; unit propagation not needed
-                (Some(false), _) => continue,   // Literal is false; keep searching
-                (None, Some(_)) => return None, // More than one literal is unassigned; not a unit clause
-                (None, None) => unassigned_lit = Some(lit.clone()), // Literal is unassigned; could be a unit clause
-            }
-        }
-        unassigned_lit
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -165,7 +152,8 @@ impl std::fmt::Display for TrailElement {
 pub enum Status {
     Satisfied,
     Falsified(Clause),
-    Unassigned(Lit),
+    UnassignedDecision(Lit),
+    UnassignedUnit(Lit, Clause),
 }
 
 impl SolverState {
@@ -190,23 +178,38 @@ impl SolverState {
 
     pub fn get_status(&self) -> Status {
         let mut unassigned = None;
+        let mut unassigned_unit = None;
+
         'outer: for clause in self.formula.clauses.iter() {
             let mut unassigned_in_clause = None;
+            let mut unassigned_count = 0;
+
             for lit in clause.literals.iter() {
                 match self.assignment.get(lit) {
                     Some(false) => continue,
                     Some(true) => continue 'outer,
-                    None => unassigned_in_clause = Some(lit.clone()),
+                    None => {
+                        unassigned_in_clause = Some(lit.clone());
+                        unassigned_count += 1;
+                    }
                 }
             }
+
             if let Some(lit) = unassigned_in_clause {
-                unassigned = Some(lit);
+                if unassigned_count == 1 {
+                    // This is a unit clause - prioritize it
+                    unassigned_unit = Some((lit.clone(), clause.clone()));
+                }
+                unassigned = Some(lit.clone());
             } else {
                 return Status::Falsified(clause.clone());
             }
         }
+        if let Some((unit_lit, unit_clause)) = unassigned_unit {
+            return Status::UnassignedUnit(unit_lit, unit_clause);
+        }
         if let Some(lit) = unassigned {
-            return Status::Unassigned(lit);
+            return Status::UnassignedDecision(lit);
         }
         Status::Satisfied
     }
@@ -283,20 +286,17 @@ impl SolverState {
         }
     }
 
-    pub fn get_unit_literal(&self) -> Option<(Clause, Lit)> {
-        self.formula.clauses.iter().find_map(|clause| {
-            clause
-                .get_unit_literal(&self.assignment)
-                .map(|lit| (clause.clone(), lit))
-        })
-    }
-
     pub fn unit_propagate(&mut self) {
-        while let Status::Unassigned(_) = self.get_status() {
-            if let Some((clause, lit)) = self.get_unit_literal() {
-                self.assign_unitprop(lit.var, lit.value, clause);
-            } else {
-                break;
+        loop {
+            match self.get_status() {
+                Status::UnassignedUnit(lit, clause) => {
+                    // Unit propagation available
+                    self.assign_unitprop(lit.var, lit.value, clause);
+                }
+                _ => {
+                    // No unit propagation available, stop
+                    break;
+                }
             }
         }
     }

@@ -32,7 +32,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
                 let _ = tx.send(None);
                 vec![]
             }
-            Status::Unassigned(lit) => {
+            Status::UnassignedDecision(lit) => {
                 // Branch on the unassigned literal
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 let mut handles = Vec::new();
@@ -50,6 +50,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
                 }
                 handles
             }
+            Status::UnassignedUnit(_, _) => unreachable!(),
         }
     }
 

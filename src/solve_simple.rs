@@ -12,7 +12,7 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> Option<Assignment> {
         match state.get_status() {
             Status::Satisfied => Some(state.assignment.fill_unassigned()),
             Status::Falsified(_) => None,
-            Status::Unassigned(lit) => {
+            Status::UnassignedDecision(lit) | Status::UnassignedUnit(lit, _) => {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 solve_backtrack_rec(fstate).or(solve_backtrack_rec(tstate))
             }
@@ -29,10 +29,11 @@ pub fn solve_dpll(cnf: &CnfFormula) -> Option<Assignment> {
         match state.get_status() {
             Status::Satisfied => Some(state.assignment.fill_unassigned()),
             Status::Falsified(_) => None,
-            Status::Unassigned(lit) => {
+            Status::UnassignedDecision(lit) => {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 solve_dpll_rec(fstate).or(solve_dpll_rec(tstate))
             }
+            Status::UnassignedUnit(_, _) => unreachable!(),
         }
     }
     let mut blank_state = SolverState::from_cnf(cnf);

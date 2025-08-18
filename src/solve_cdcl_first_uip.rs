@@ -15,11 +15,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             Status::Satisfied => {
                 return Some(state.assignment.fill_unassigned());
             }
-            Status::Unassigned(lit) => {
+            Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
                 state.decide(lit.var, lit.value);
                 eprintln!("Decision: {}", state.trail.iter().join(" "));
             }
+            Status::UnassignedUnit(_, _) => unreachable!(),
             Status::Falsified(falsified_clause) => {
                 // We start with the cut placed after all unit propagations,
                 // and incrementally move it backwards until the ensuing
