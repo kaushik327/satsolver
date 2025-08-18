@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use itertools::Itertools;
 
@@ -6,15 +6,14 @@ use crate::formula::*;
 use crate::solver_state::*;
 
 struct LiteralsLeftOfCut<'a> {
-    literals: HashSet<(Lit, u32)>,
+    literals: BTreeSet<(Lit, u32)>,
     state: &'a SolverState,
 }
 
 impl<'a> LiteralsLeftOfCut<'a> {
     fn new(falsified_clause: Clause, state: &'a SolverState) -> Self {
         Self {
-            // TODO: HashSet leads to nondeterministic behavior, annoying to debug
-            literals: HashSet::from_iter(falsified_clause.literals.into_iter().map(|lit| {
+            literals: BTreeSet::from_iter(falsified_clause.literals.into_iter().map(|lit| {
                 (
                     lit.not(),
                     state.assignment.get_decision_level(&lit).unwrap(),
