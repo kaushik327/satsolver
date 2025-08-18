@@ -37,16 +37,25 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 eprintln!("Trail: {}", state.trail.iter().join(" "));
 
                 for trail_element in state.trail.iter().rev() {
-                    eprintln!("\tLeft of cut: {}", left_of_cut.iter().join(" "));
-
                     // Check the decision levels of the learned clause's literals.
-                    let decision_levels = Vec::from_iter(
+                    let lits_and_decision_levels = Vec::from_iter(
                         left_of_cut
                             .iter()
-                            .map(|lit| state.assignment.get_decision_level(lit).unwrap()),
+                            .map(|lit| (lit, state.assignment.get_decision_level(lit).unwrap())),
                     );
 
-                    eprintln!("\tDecision levels: {}", decision_levels.iter().join(" "));
+                    eprintln!(
+                        "\tLeft of cut: {}",
+                        lits_and_decision_levels
+                            .iter()
+                            .map(|(lit, level)| format!("{lit}({level})"))
+                            .join(" ")
+                    );
+
+                    let decision_levels = lits_and_decision_levels
+                        .into_iter()
+                        .map(|(_, level)| level)
+                        .collect::<Vec<_>>();
 
                     let current_level_count = decision_levels
                         .iter()
@@ -55,12 +64,11 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     assert!(current_level_count > 0);
                     if current_level_count == 1 {
                         // We have found a UIP cut.
+
                         // Add the learned clause to the state
                         let learned_clause = Clause {
                             literals: left_of_cut.into_iter().map(|lit| lit.not()).collect(),
                         };
-                        eprintln!("\tLearned clause: {learned_clause}");
-                        state.learn_clause(learned_clause);
 
                         // Get the second-largest decision level and backjump to it
                         let mut sorted_levels: Vec<u32> = decision_levels.into_iter().collect();
@@ -74,14 +82,13 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                         };
 
                         eprintln!(
-                            "\tBackjumping from level {} to level {}",
-                            state.decision_level, backjump_level
+                            "\tBackjumping from level {} to level {}, learning clause {}",
+                            state.decision_level, backjump_level, learned_clause
                         );
+                        state.learn_clause(learned_clause);
                         state.backjump_to_decision_level(backjump_level);
                         break;
                     }
-
-                    eprintln!("\tTrail element: {trail_element:?}");
 
                     // Move the cut from the right to the left of this trail element.
                     // That involves removing this element's literal from the learned
@@ -89,6 +96,9 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     // element (if they are not already present).
                     match &trail_element.reason {
                         TrailReason::UnitProp(clause) => {
+                            eprintln!(
+                                "\tJumping past trail element: {trail_element} from {clause}"
+                            );
                             for lit in clause.literals.iter() {
                                 if lit.var == trail_element.lit.var {
                                     assert!(lit.value == trail_element.lit.value);

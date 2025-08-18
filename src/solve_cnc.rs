@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::thread;
 
 #[allow(dead_code)]
+#[deprecated]
 pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     // Create a recursive function that returns a vector of thread handles
     fn solve_cnc_rec(
@@ -81,6 +82,7 @@ mod tests {
     use crate::parser::parse_dimacs_str;
 
     #[test]
+    #[allow(deprecated)]
     fn test_solve_cnc_sat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
         assert!(solve_cnc(&cnf, 3)
@@ -88,6 +90,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_solve_cnc_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
         assert!(solve_cnc(&cnf, 3).is_none());
