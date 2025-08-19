@@ -56,7 +56,7 @@ impl<'a> LiteralsLeftOfCut<'a> {
             unreachable!();
         };
 
-        info!("\tJumping past trail element: {trail_element} from {clause}");
+        info!("\tTrail element: {trail_element} from {clause}");
 
         for lit in clause.literals.iter() {
             if lit.var == trail_element.lit.var {
@@ -73,11 +73,11 @@ impl std::fmt::Display for LiteralsLeftOfCut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}",
+            "{} -> ø",
             self.literals
                 .iter()
                 .map(|(level, lit)| format!("{lit}({level})"))
-                .join(" ")
+                .join(" ^ ")
         )
     }
 }
@@ -91,12 +91,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             }
             Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
-                info!("Guess:\t{lit}");
+                info!("Guess: {lit}");
                 state.decide(lit.var, lit.value);
             }
             Status::UnassignedUnit(lit, clause) => {
                 // Unit-clause propagation available
-                info!("Unit:\t{lit} from {clause}");
+                info!("Unit: {lit} from {clause}");
                 state.assign_unitprop(lit.var, lit.value, clause);
             }
             Status::Falsified(falsified_clause) => {
@@ -119,7 +119,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
 
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
-                    info!("\tLeft of cut: {left_of_cut}");
+                    info!("\tContradiction: {left_of_cut}");
                     let backjump_level = left_of_cut.get_backjump_level();
                     if backjump_level != state.decision_level {
                         // We have found a UIP cut.
