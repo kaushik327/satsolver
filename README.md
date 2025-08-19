@@ -15,5 +15,5 @@ RUST_LOG=info cargo run -- --solver cdcl-first-uip --dimacs-output examples/exam
 ```bash
 mkdir examples/aim
 wget -qO- https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT/DIMACS/AIM/aim.tar.gz | tar xvf - -C examples/aim
-cargo run examples/aim/* 2> /dev/null
+cargo run examples/aim/*
 ```
