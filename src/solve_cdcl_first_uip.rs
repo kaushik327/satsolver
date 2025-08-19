@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use itertools::Itertools;
+use log::info;
 
 use crate::formula::*;
 use crate::solver_state::*;
@@ -55,7 +56,7 @@ impl<'a> LiteralsLeftOfCut<'a> {
             unreachable!();
         };
 
-        eprintln!("\tJumping past trail element: {trail_element} from {clause}");
+        info!("\tJumping past trail element: {trail_element} from {clause}");
 
         for lit in clause.literals.iter() {
             if lit.var == trail_element.lit.var {
@@ -82,7 +83,7 @@ impl std::fmt::Display for LiteralsLeftOfCut<'_> {
 }
 
 pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignment> {
-    eprintln!("Initial formula: {}", state.formula);
+    info!("Initial formula: {}", state.formula);
     loop {
         match state.get_status() {
             Status::Satisfied => {
@@ -90,12 +91,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
             }
             Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
-                eprintln!("Guess:\t{lit}");
+                info!("Guess:\t{lit}");
                 state.decide(lit.var, lit.value);
             }
             Status::UnassignedUnit(lit, clause) => {
                 // Unit-clause propagation available
-                eprintln!("Unit:\t{lit} from {clause}");
+                info!("Unit:\t{lit} from {clause}");
                 state.assign_unitprop(lit.var, lit.value, clause);
             }
             Status::Falsified(falsified_clause) => {
@@ -104,7 +105,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                 // learned clause would contain exactly one literal from
                 // the current decision level.
 
-                eprintln!(
+                info!(
                     "Falsified {} at trail: {}",
                     falsified_clause,
                     state.trail.iter().join(" ")
@@ -118,12 +119,12 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
 
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
-                    eprintln!("\tLeft of cut: {left_of_cut}");
+                    info!("\tLeft of cut: {left_of_cut}");
                     let backjump_level = left_of_cut.get_backjump_level();
                     if backjump_level != state.decision_level {
                         // We have found a UIP cut.
                         let learned_clause = left_of_cut.get_learned_clause();
-                        eprintln!(
+                        info!(
                             "\tBackjumping from level {} to level {}, learning clause {}",
                             state.decision_level, backjump_level, learned_clause
                         );

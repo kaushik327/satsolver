@@ -37,6 +37,8 @@ enum SolverOption {
 }
 
 fn main() {
+    env_logger::init();
+
     let args = Args::parse();
 
     for file in args.file {
