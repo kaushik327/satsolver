@@ -6,12 +6,12 @@ use log::info;
 use crate::formula::*;
 use crate::solver_state::*;
 
-struct LiteralsLeftOfCut<'a> {
+struct ConflictingLits<'a> {
     literals: BTreeSet<(u32, Lit)>,
     state: &'a SolverState,
 }
 
-impl<'a> LiteralsLeftOfCut<'a> {
+impl<'a> ConflictingLits<'a> {
     fn new(falsified_clause: Clause, state: &'a SolverState) -> Self {
         let mut ret = Self {
             literals: BTreeSet::new(),
@@ -69,7 +69,7 @@ impl<'a> LiteralsLeftOfCut<'a> {
     }
 }
 
-impl std::fmt::Display for LiteralsLeftOfCut<'_> {
+impl std::fmt::Display for ConflictingLits<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -115,15 +115,15 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     return None;
                 }
 
-                let mut left_of_cut = LiteralsLeftOfCut::new(falsified_clause, &state);
+                let mut conflict = ConflictingLits::new(falsified_clause, &state);
 
                 for trail_element in state.trail.iter().rev() {
                     // Check the decision levels of the learned clause's literals.
-                    info!("\tContradiction: {left_of_cut}");
-                    let backjump_level = left_of_cut.get_backjump_level();
+                    info!("\tContradiction: {conflict}");
+                    let backjump_level = conflict.get_backjump_level();
                     if backjump_level != state.decision_level {
                         // We have found a UIP cut.
-                        let learned_clause = left_of_cut.get_learned_clause();
+                        let learned_clause = conflict.get_learned_clause();
                         info!(
                             "\tBackjumping from level {} to level {}, learning clause {}",
                             state.decision_level, backjump_level, learned_clause
@@ -137,7 +137,7 @@ pub fn solve_cdcl_first_uip_from_state(mut state: SolverState) -> Option<Assignm
                     // That involves removing this element's literal from the learned
                     // clause (if it is present), but adding the literals that were used to infer this
                     // element (if they are not already present).
-                    left_of_cut.update(trail_element);
+                    conflict.update(trail_element);
                 }
             }
         }
