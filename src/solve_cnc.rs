@@ -1,12 +1,10 @@
 use crate::formula::*;
-use crate::solve_cdcl::*;
+use crate::solve_cdcl_first_uip::*;
 use crate::solver_state::*;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
-#[allow(dead_code)]
-#[deprecated]
 pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     // Create a recursive function that returns a vector of thread handles
     fn solve_cnc_rec(
@@ -16,7 +14,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     ) -> Vec<thread::JoinHandle<()>> {
         if depth == 0 {
             // Base case: use CDCL solver
-            let result = solve_cdcl_from_state(state);
+            let result = solve_cdcl_first_uip_from_state(state);
             let _ = tx.send(result);
             return vec![];
         }
@@ -85,7 +83,6 @@ mod tests {
     use crate::parser::parse_dimacs_str;
 
     #[test]
-    #[allow(deprecated)]
     fn test_solve_cnc_sat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
         assert!(solve_cnc(&cnf, 3)
@@ -93,7 +90,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_solve_cnc_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
         assert!(solve_cnc(&cnf, 3).is_none());

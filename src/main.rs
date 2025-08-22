@@ -31,6 +31,7 @@ struct Args {
 enum SolverOption {
     Cdcl,
     CdclFirstUip,
+    Cnc,
     Dpll,
     Backtrack,
     Basic,
@@ -59,6 +60,7 @@ fn main() {
         let answer: Option<solver_state::Assignment> = match args.solver {
             SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
             SolverOption::CdclFirstUip => solve_cdcl_first_uip::solve_cdcl_first_uip(&cnf),
+            SolverOption::Cnc => solve_cnc::solve_cnc(&cnf, args.depth),
             SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
             SolverOption::Backtrack => solve_simple::solve_backtrack(&cnf),
             SolverOption::Basic => solve_simple::solve_basic(&cnf),
