@@ -1,20 +1,13 @@
-#[cfg(test)]
 use crate::formula::*;
-
-#[cfg(test)]
 use rand::prelude::*;
-
-#[cfg(test)]
 use std::collections::HashSet;
 
-#[cfg(test)]
 pub fn generate_random_cnf(n: usize, k: usize, l: usize) -> CnfFormula {
     // Generates a random k-SAT CNF formula with n variables and l clauses
 
     if k > n {
         panic!(
-            "Cannot generate clauses with {} variables when only {} variables exist",
-            k, n
+            "Cannot generate clauses with {k} variables when only {n} variables exist"
         );
     }
 
@@ -32,7 +25,6 @@ pub fn generate_random_cnf(n: usize, k: usize, l: usize) -> CnfFormula {
     }
 }
 
-#[cfg(test)]
 fn generate_random_clause(n: usize, k: usize, rng: &mut ThreadRng) -> Clause {
     // Choose k unique variables from 1..=n
     let mut chosen_vars = HashSet::new();

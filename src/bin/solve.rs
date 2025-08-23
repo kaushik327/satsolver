@@ -1,10 +1,9 @@
-mod formula;
-mod parser;
-mod random;
-mod solve_cdcl;
-mod solve_cnc;
-mod solve_simple;
-mod solver_state;
+use satsolver::parser;
+use satsolver::solve_cdcl;
+use satsolver::solve_cnc;
+use satsolver::solve_simple;
+use satsolver::solver_state;
+
 
 use clap::Parser;
 use std::fs::File;
