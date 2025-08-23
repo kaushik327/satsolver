@@ -1,5 +1,6 @@
 mod formula;
 mod parser;
+mod random;
 mod solve_cdcl;
 mod solve_cnc;
 mod solve_simple;
