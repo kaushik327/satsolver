@@ -1,7 +1,6 @@
 mod formula;
 mod parser;
 mod solve_cdcl;
-mod solve_cdcl_first_uip;
 mod solve_cnc;
 mod solve_simple;
 mod solver_state;
@@ -14,7 +13,7 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "cdcl-first-uip")]
+    #[arg(short, long, default_value = "cdcl")]
     solver: SolverOption,
 
     /// Depth parameter for CNC solver
@@ -30,7 +29,6 @@ struct Args {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum SolverOption {
     Cdcl,
-    CdclFirstUip,
     Cnc,
     Dpll,
     Backtrack,
@@ -59,7 +57,6 @@ fn main() {
         let start_time = Instant::now();
         let answer: Option<solver_state::Assignment> = match args.solver {
             SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
-            SolverOption::CdclFirstUip => solve_cdcl_first_uip::solve_cdcl_first_uip(&cnf),
             SolverOption::Cnc => solve_cnc::solve_cnc(&cnf, args.depth),
             SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
             SolverOption::Backtrack => solve_simple::solve_backtrack(&cnf),

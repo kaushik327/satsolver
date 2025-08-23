@@ -1,5 +1,5 @@
 use crate::formula::*;
-use crate::solve_cdcl_first_uip::*;
+use crate::solve_cdcl::*;
 use crate::solver_state::*;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     ) -> Vec<thread::JoinHandle<()>> {
         if depth == 0 {
             // Base case: use CDCL solver
-            let result = solve_cdcl_first_uip_from_state(state);
+            let result = solve_cdcl_from_state(state);
             let _ = tx.send(result);
             return vec![];
         }

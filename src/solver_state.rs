@@ -235,17 +235,6 @@ impl SolverState {
         self.formula.clauses.push(clause);
     }
 
-    pub fn get_last_decision_index(&self) -> Option<(usize, &Assignment)> {
-        self.trail
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, elem)| match &elem.reason {
-                TrailReason::Decision(snapshot) => Some((idx, snapshot)),
-                _ => None,
-            })
-            .next_back()
-    }
-
     pub fn backjump_to_decision_level(&mut self, decision_level: u32) {
         let (cut_idx, snapshot) = self
             .trail

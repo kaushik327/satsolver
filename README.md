@@ -9,7 +9,7 @@ cargo run -- --solver dpll --dimacs-output examples/example2.cnf
 ```
 
 ```bash
-RUST_LOG=info cargo run -- --solver cdcl-first-uip --dimacs-output examples/example3.cnf
+RUST_LOG=info cargo run -- --solver cdcl --dimacs-output examples/example3.cnf
 ```
 
 ```bash
