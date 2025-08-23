@@ -4,7 +4,6 @@ use satsolver::solve_cnc;
 use satsolver::solve_simple;
 use satsolver::solver_state;
 
-
 use clap::Parser;
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, BufWriter, Read};

@@ -6,9 +6,7 @@ pub fn generate_random_cnf(n: usize, k: usize, l: usize) -> CnfFormula {
     // Generates a random k-SAT CNF formula with n variables and l clauses
 
     if k > n {
-        panic!(
-            "Cannot generate clauses with {k} variables when only {n} variables exist"
-        );
+        panic!("Cannot generate clauses with {k} variables when only {n} variables exist");
     }
 
     let mut rng = rand::rng();
