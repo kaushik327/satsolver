@@ -1,0 +1,25 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+    -   id: check-yaml
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+-   repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+    -   id: black
+-   repo: local
+    hooks:
+    -   id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        files: \.rs$
+        pass_filenames: false
+    -   id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features --fix --allow-dirty -- -D warnings
+        language: system
+        files: \.rs$
+        pass_filenames: false

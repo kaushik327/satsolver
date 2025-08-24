@@ -25,7 +25,7 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    for num_variables in &args.num_variables {    
+    for num_variables in &args.num_variables {
         for num_clauses in &args.num_clauses {
             let mut successful = 0;
             for _ in 0..args.repetitions {
@@ -45,7 +45,7 @@ fn main() {
                     "sat": answer.is_some(),
                     "duration": duration.as_millis(),
                 });
-                println!("{}", result.to_string());
+                println!("{result}");
                 std::io::stdout().flush().unwrap();
 
                 if answer.is_some() {
