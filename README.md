@@ -23,3 +23,15 @@ Run 20 random 3CNF-SAT instances with 40 variables and 160 clauses:
 ```bash
 cargo run --bin random -- -n 40 -k 3 -l 160 -r 20
 ```
+
+Recreate a finding about random SAT formulas:
+```bash
+cargo run --bin random -- \
+    -r 100 \
+    -n 100 \
+    -k 3 \
+    -l 160 200 240 280 320 360 380 400 420 440 460 480 520 560 600 \
+    >> sat.jsonl
+uv run scripts/viz.py sat.jsonl
+```
+![Relation between L/N ratio and SAT probability](figures/graph.png)
