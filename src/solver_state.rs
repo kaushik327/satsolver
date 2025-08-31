@@ -176,6 +176,7 @@ impl SolverState {
             .collect_vec()
     }
 
+    // TODO: avoid repeated linear scans; get_status takes the most time by far in profiles
     pub fn get_status(&self) -> Status {
         let mut unassigned = None;
         let mut unassigned_unit = None;
@@ -216,6 +217,7 @@ impl SolverState {
 
     pub fn decide(&mut self, var: Var, value: Val) {
         self.decision_level += 1;
+        // TODO: repeatedly cloning the assignment for this reason is inefficient
         self.trail.push(TrailElement {
             lit: Lit { var, value },
             reason: TrailReason::Decision(self.assignment.clone()),

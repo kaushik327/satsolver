@@ -1,5 +1,10 @@
 /target
 .vscode
 .DS_Store
+
+# logs
 *.log
 *.jsonl
+
+# profiles
+*.json.gz
