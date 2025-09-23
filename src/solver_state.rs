@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use rayon::prelude::*;
 
 use crate::formula::*;
 
@@ -211,37 +212,53 @@ impl SolverState {
 
     // TODO: avoid repeated linear scans; get_status takes the most time by far in profiles
     pub fn get_status(&self) -> Status {
-        let mut unassigned = None;
-        let mut unassigned_unit = None;
+        #[derive(Debug)]
+        enum ClauseResult {
+            Falsified(Clause),
+            Unit(Lit, Clause),
+            Unassigned(Lit),
+            Satisfied,
+        }
 
-        'outer: for clause in self.formula.clauses.iter() {
-            let mut unassigned_in_clause = None;
-            let mut unassigned_count = 0;
+        let results: Vec<_> = self
+            .formula
+            .clauses
+            .par_iter()
+            .map(|clause| {
+                let mut unassigned_in_clause = None;
+                let mut unassigned_count = 0;
 
-            for lit in clause.literals.iter() {
-                match self.assignment.get(lit) {
-                    Some(false) => continue,
-                    Some(true) => continue 'outer,
-                    None => {
-                        unassigned_in_clause = Some(*lit);
-                        unassigned_count += 1;
+                for lit in clause.literals.iter() {
+                    match self.assignment.get(lit) {
+                        Some(false) => continue,
+                        Some(true) => return ClauseResult::Satisfied,
+                        None => {
+                            unassigned_in_clause = Some(*lit);
+                            unassigned_count += 1;
+                        }
                     }
                 }
-            }
 
-            if let Some(lit) = unassigned_in_clause {
-                if unassigned_count == 1 {
-                    // This is a unit clause - prioritize it
-                    unassigned_unit = Some((lit, clause.clone()));
+                match (unassigned_in_clause, unassigned_count) {
+                    (None, 0) => ClauseResult::Falsified(clause.clone()),
+                    (Some(lit), 1) => ClauseResult::Unit(lit, clause.clone()),
+                    (Some(lit), _) => ClauseResult::Unassigned(lit),
+                    _ => unreachable!(),
                 }
-                unassigned = Some(lit);
-            } else {
-                return Status::Falsified(clause.clone());
+            })
+            .collect();
+
+        // Process results: falsified first, then unit, then any unassigned
+        let mut unassigned = None;
+        for result in results {
+            match result {
+                ClauseResult::Falsified(clause) => return Status::Falsified(clause),
+                ClauseResult::Unit(lit, clause) => return Status::UnassignedUnit(lit, clause),
+                ClauseResult::Unassigned(lit) => unassigned = Some(lit),
+                ClauseResult::Satisfied => continue,
             }
         }
-        if let Some((unit_lit, unit_clause)) = unassigned_unit {
-            return Status::UnassignedUnit(unit_lit, unit_clause);
-        }
+
         if let Some(lit) = unassigned {
             return Status::UnassignedDecision(lit);
         }

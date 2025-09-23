@@ -40,3 +40,6 @@ Get a simple DRAT proof of unsatisfiability:
 ```bash
 cargo run -- --solver cdcl --output-dir out examples/example4.cnf
 ```
+
+profile:
+samply record -r 10000 ./target/profiling/random -n 100 -k 3 -l 420 -r 10
