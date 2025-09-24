@@ -6,7 +6,7 @@ use satsolver::solver_state;
 
 use clap::Parser;
 use std::fs::File;
-use std::io::{stdin, stdout, BufReader, BufWriter, Read};
+use std::io::{stdin, BufReader, BufWriter, Read};
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -22,7 +22,10 @@ struct Args {
     file: Vec<String>,
 
     #[arg(long)]
-    dimacs_output: bool,
+    dimacs_output: Option<String>,
+
+    #[arg(long)]
+    drat_output: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -38,6 +41,11 @@ fn main() {
     env_logger::init();
 
     let args = Args::parse();
+
+    if args.file.is_empty() {
+        eprintln!("No input files specified");
+        std::process::exit(1);
+    }
 
     for file in args.file {
         let reader: Box<dyn Read> = if file == "-" {
@@ -63,24 +71,33 @@ fn main() {
         };
         let duration = start_time.elapsed();
 
-        if args.dimacs_output {
+        if let Some(ref dimacs_output_filename) = args.dimacs_output {
             println!("c runtime: {duration:?}");
-            parser::output_dimacs(&mut BufWriter::new(stdout()), &answer).unwrap();
-
-            if let Some(proof) = answer.unsat_proof() {
-                parser::output_drat(&mut BufWriter::new(stdout()), &proof).unwrap();
-            }
-        } else {
-            let line_beginning = if answer.is_satisfiable() {
-                "\x1b[32mSAT"
-            } else {
-                "\x1b[31mUNSAT"
-            };
-            println!(
-                "{line_beginning}: {file} in {:.3}s\x1b[0m",
-                duration.as_secs_f64()
-            );
+            parser::output_dimacs(
+                &mut BufWriter::new(File::create(dimacs_output_filename).unwrap()),
+                &answer,
+            )
+            .unwrap();
         }
+        if let Some(ref drat_output_filename) = args.drat_output {
+            if let Some(proof) = answer.unsat_proof() {
+                parser::output_drat(
+                    &mut BufWriter::new(File::create(drat_output_filename).unwrap()),
+                    &proof,
+                )
+                .unwrap();
+            }
+        }
+
+        let line_beginning = if answer.is_satisfiable() {
+            "\x1b[32mSAT"
+        } else {
+            "\x1b[31mUNSAT"
+        };
+        println!(
+            "{line_beginning}: {file} in {:.3}s\x1b[0m",
+            duration.as_secs_f64()
+        );
 
         if let Some(assignment) = answer.assignment() {
             assert!(
