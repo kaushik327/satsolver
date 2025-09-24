@@ -82,12 +82,12 @@ impl std::fmt::Display for ConflictingLits<'_> {
     }
 }
 
-pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
+pub fn solve_cdcl_from_state(mut state: SolverState) -> SolverResult {
     info!("Initial formula: {}", state.formula);
     loop {
         match state.get_status() {
             Status::Satisfied => {
-                return Some(state.assignment.fill_unassigned());
+                return SolverResult::Satisfiable(state.assignment.fill_unassigned());
             }
             Status::UnassignedDecision(lit) => {
                 // Decide some unassigned literal and add it to the trail.
@@ -112,7 +112,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
                 );
 
                 if state.decision_level == 0 {
-                    return None;
+                    return SolverResult::Unsatisfiable;
                 }
 
                 let mut conflict = ConflictingLits::new(falsified_clause, &state);
@@ -144,7 +144,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> Option<Assignment> {
     }
 }
 
-pub fn solve_cdcl(cnf: &CnfFormula) -> Option<Assignment> {
+pub fn solve_cdcl(cnf: &CnfFormula) -> SolverResult {
     let state = SolverState::from_cnf(cnf);
     solve_cdcl_from_state(state)
 }
@@ -157,13 +157,15 @@ mod tests {
     #[test]
     fn test_solve_cdcl_sat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
-        assert!(solve_cdcl(&cnf)
-            .is_some_and(|a| a.get_unassigned_var().is_none() && check_assignment(&cnf, &a)));
+        let result = solve_cdcl(&cnf);
+        assert!(result.is_satisfiable());
+        let assignment = result.into_assignment().unwrap();
+        assert!(assignment.get_unassigned_var().is_none() && check_assignment(&cnf, &assignment));
     }
 
     #[test]
     fn test_solve_cdcl_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(solve_cdcl(&cnf).is_none());
+        assert!(solve_cdcl(&cnf).is_unsatisfiable());
     }
 }

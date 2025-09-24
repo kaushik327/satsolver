@@ -42,13 +42,13 @@ fn main() {
                     "n": num_variables,
                     "k": args.num_variables_per_clause,
                     "l": num_clauses,
-                    "sat": answer.is_some(),
+                    "sat": answer.is_satisfiable(),
                     "duration": duration.as_millis(),
                 });
                 println!("{result}");
                 std::io::stdout().flush().unwrap();
 
-                if answer.is_some() {
+                if answer.is_satisfiable() {
                     successful += 1;
                 }
             }

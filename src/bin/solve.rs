@@ -54,7 +54,7 @@ fn main() {
         let cnf = parser::parse_dimacs(BufReader::new(reader)).unwrap();
 
         let start_time = Instant::now();
-        let answer: Option<solver_state::Assignment> = match args.solver {
+        let answer: solver_state::SolverResult = match args.solver {
             SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
             SolverOption::Cnc => solve_cnc::solve_cnc(&cnf, args.depth),
             SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
@@ -67,7 +67,7 @@ fn main() {
             println!("c runtime: {duration:?}");
             parser::output_dimacs(&mut BufWriter::new(stdout()), &answer).unwrap();
         } else {
-            let line_beginning = if answer.is_some() {
+            let line_beginning = if answer.is_satisfiable() {
                 "\x1b[32mSAT"
             } else {
                 "\x1b[31mUNSAT"
@@ -80,10 +80,10 @@ fn main() {
 
         // We don't have proofs of unsatisfiability yet.
 
-        if let Some(assignment) = answer {
+        if let Some(assignment) = answer.assignment() {
             assert!(
                 assignment.get_unassigned_var().is_none()
-                    && solver_state::check_assignment(&cnf, &assignment)
+                    && solver_state::check_assignment(&cnf, assignment)
             );
         }
     }

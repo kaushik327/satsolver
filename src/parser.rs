@@ -91,9 +91,9 @@ pub fn parse_dimacs_str(text: &[u8]) -> Result<CnfFormula, io::Error> {
 
 pub fn output_dimacs<W: io::Write>(
     writer: &mut io::BufWriter<W>,
-    assignment: &Option<Assignment>,
+    result: &SolverResult,
 ) -> io::Result<()> {
-    if let Some(assignment) = assignment {
+    if let Some(assignment) = result.assignment() {
         writer.write_all(b"s SATISFIABLE\nv")?;
 
         for i in 1..=assignment.num_vars() {

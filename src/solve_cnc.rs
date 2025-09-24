@@ -5,12 +5,12 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
-pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
+pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> SolverResult {
     // Create a recursive function that returns a vector of thread handles
     fn solve_cnc_rec(
         mut state: SolverState,
         depth: usize,
-        tx: Arc<mpsc::Sender<Option<Assignment>>>,
+        tx: Arc<mpsc::Sender<SolverResult>>,
     ) -> Vec<thread::JoinHandle<()>> {
         if depth == 0 {
             // Base case: use CDCL solver
@@ -21,12 +21,14 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
         match state.get_status() {
             Status::Satisfied => {
                 // Found a satisfying assignment
-                let _ = tx.send(Some(state.assignment.fill_unassigned()));
+                let _ = tx.send(SolverResult::Satisfiable(
+                    state.assignment.fill_unassigned(),
+                ));
                 vec![]
             }
             Status::Falsified(_) => {
                 // This branch is unsatisfiable
-                let _ = tx.send(None);
+                let _ = tx.send(SolverResult::Unsatisfiable);
                 vec![]
             }
             Status::UnassignedDecision(lit) => {
@@ -74,7 +76,9 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize) -> Option<Assignment> {
     drop(tx);
 
     // Collect and process results
-    rx.iter().flatten().next()
+    rx.iter()
+        .find(|result| result.is_satisfiable())
+        .unwrap_or(SolverResult::Unsatisfiable)
 }
 
 #[cfg(test)]
@@ -85,13 +89,15 @@ mod tests {
     #[test]
     fn test_solve_cnc_sat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
-        assert!(solve_cnc(&cnf, 3)
-            .is_some_and(|a| a.get_unassigned_var().is_none() && check_assignment(&cnf, &a)));
+        let result = solve_cnc(&cnf, 3);
+        assert!(result.is_satisfiable());
+        let assignment = result.into_assignment().unwrap();
+        assert!(assignment.get_unassigned_var().is_none() && check_assignment(&cnf, &assignment));
     }
 
     #[test]
     fn test_solve_cnc_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(solve_cnc(&cnf, 3).is_none());
+        assert!(solve_cnc(&cnf, 3).is_unsatisfiable());
     }
 }

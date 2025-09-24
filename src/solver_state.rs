@@ -13,6 +13,36 @@ pub struct Assignment {
     assignment: Vec<Option<Record>>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum SolverResult {
+    Satisfiable(Assignment),
+    Unsatisfiable,
+}
+
+impl SolverResult {
+    pub fn is_satisfiable(&self) -> bool {
+        matches!(self, Self::Satisfiable(_))
+    }
+
+    pub fn is_unsatisfiable(&self) -> bool {
+        matches!(self, Self::Unsatisfiable)
+    }
+
+    pub fn assignment(&self) -> Option<&Assignment> {
+        match self {
+            Self::Satisfiable(assignment) => Some(assignment),
+            Self::Unsatisfiable => None,
+        }
+    }
+
+    pub fn into_assignment(self) -> Option<Assignment> {
+        match self {
+            Self::Satisfiable(assignment) => Some(assignment),
+            Self::Unsatisfiable => None,
+        }
+    }
+}
+
 impl Assignment {
     pub fn empty(num_vars: usize) -> Self {
         Self {
