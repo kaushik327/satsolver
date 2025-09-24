@@ -21,7 +21,7 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> SolverResult {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 match solve_backtrack_rec(fstate) {
                     SolverResult::Satisfiable(assignment) => SolverResult::Satisfiable(assignment),
-                    SolverResult::Unsatisfiable => solve_backtrack_rec(tstate),
+                    _ => solve_backtrack_rec(tstate),
                 }
             }
         }
@@ -40,7 +40,7 @@ pub fn solve_dpll(cnf: &CnfFormula) -> SolverResult {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 match solve_dpll_rec(fstate) {
                     SolverResult::Satisfiable(assignment) => SolverResult::Satisfiable(assignment),
-                    SolverResult::Unsatisfiable => solve_dpll_rec(tstate),
+                    _ => solve_dpll_rec(tstate),
                 }
             }
             Status::UnassignedUnit(lit, clause) => {
@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn test_solve_basic_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(solve_basic(&cnf).is_unsatisfiable());
+        assert!(!solve_basic(&cnf).is_satisfiable());
     }
 
     #[test]
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn test_solve_backtrack_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(solve_backtrack(&cnf).is_unsatisfiable());
+        assert!(!solve_backtrack(&cnf).is_satisfiable());
     }
 
     #[test]
@@ -101,6 +101,6 @@ mod tests {
     #[test]
     fn test_solve_dpll_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(solve_dpll(&cnf).is_unsatisfiable());
+        assert!(!solve_dpll(&cnf).is_satisfiable());
     }
 }

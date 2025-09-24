@@ -98,6 +98,6 @@ mod tests {
     #[test]
     fn test_solve_cnc_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(solve_cnc(&cnf, 3).is_unsatisfiable());
+        assert!(!solve_cnc(&cnf, 3).is_satisfiable());
     }
 }

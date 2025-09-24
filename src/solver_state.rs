@@ -17,28 +17,31 @@ pub struct Assignment {
 pub enum SolverResult {
     Satisfiable(Assignment),
     Unsatisfiable,
+    UnsatisfiableWithProof(Vec<Clause>),
 }
 
 impl SolverResult {
     pub fn is_satisfiable(&self) -> bool {
         matches!(self, Self::Satisfiable(_))
     }
-
-    pub fn is_unsatisfiable(&self) -> bool {
-        matches!(self, Self::Unsatisfiable)
-    }
-
     pub fn assignment(&self) -> Option<&Assignment> {
         match self {
             Self::Satisfiable(assignment) => Some(assignment),
-            Self::Unsatisfiable => None,
+            _ => None,
         }
     }
 
     pub fn into_assignment(self) -> Option<Assignment> {
         match self {
             Self::Satisfiable(assignment) => Some(assignment),
-            Self::Unsatisfiable => None,
+            _ => None,
+        }
+    }
+
+    pub fn unsat_proof(&self) -> Option<Vec<Clause>> {
+        match self {
+            Self::UnsatisfiableWithProof(proof) => Some(proof.clone()),
+            _ => None,
         }
     }
 }

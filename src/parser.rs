@@ -119,6 +119,26 @@ pub fn output_dimacs<W: io::Write>(
     Ok(())
 }
 
+pub fn output_drat<W: io::Write>(
+    writer: &mut io::BufWriter<W>,
+    proof: &Vec<Clause>,
+) -> io::Result<()> {
+    for clause in proof {
+        for lit in &clause.literals {
+            writer.write_all(
+                format!(
+                    "{}{} ",
+                    if lit.value == Val::True { "" } else { "-" },
+                    lit.var.index
+                )
+                .as_bytes(),
+            )?;
+        }
+        writer.write_all(b"0\n")?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

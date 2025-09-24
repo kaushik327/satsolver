@@ -66,6 +66,10 @@ fn main() {
         if args.dimacs_output {
             println!("c runtime: {duration:?}");
             parser::output_dimacs(&mut BufWriter::new(stdout()), &answer).unwrap();
+
+            if let Some(proof) = answer.unsat_proof() {
+                parser::output_drat(&mut BufWriter::new(stdout()), &proof).unwrap();
+            }
         } else {
             let line_beginning = if answer.is_satisfiable() {
                 "\x1b[32mSAT"
@@ -77,8 +81,6 @@ fn main() {
                 duration.as_secs_f64()
             );
         }
-
-        // We don't have proofs of unsatisfiability yet.
 
         if let Some(assignment) = answer.assignment() {
             assert!(
