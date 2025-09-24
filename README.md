@@ -5,11 +5,11 @@ This is a Rust-based SAT solver using CDCL (conflict-driven clause learning).
 ## Usage
 
 ```bash
-cargo run -- --solver dpll --dimacs-output example2.dimacs examples/example2.cnf
+cargo run -- --solver dpll --output-dir out examples/example2.cnf
 ```
 
 ```bash
-RUST_LOG=info cargo run -- --solver cdcl --dimacs-output example3.dimacs examples/example3.cnf
+RUST_LOG=info cargo run -- --solver cdcl --output-dir out examples/example3.cnf
 ```
 
 Run on all of an open SATLIB dataset:
@@ -38,5 +38,5 @@ uv run scripts/viz.py sat.jsonl
 
 Get a simple DRAT proof of unsatisfiability:
 ```bash
-cargo run -- --solver cdcl --drat-output example3.drat examples/example3.cnf
+cargo run -- --solver cdcl --output-dir out examples/example4.cnf
 ```

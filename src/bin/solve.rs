@@ -5,8 +5,9 @@ use satsolver::solve_simple;
 use satsolver::solver_state;
 
 use clap::Parser;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{stdin, BufReader, BufWriter, Read};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -19,13 +20,15 @@ struct Args {
     #[arg(short, long, default_value_t = 3)]
     depth: usize,
 
+    /// Input CNF files to solve. Use '-' for stdin.
+    /// Multiple files allowed only when no output files are specified.
     file: Vec<String>,
 
-    #[arg(long)]
-    dimacs_output: Option<String>,
-
-    #[arg(long)]
-    drat_output: Option<String>,
+    /// Output directory. When specified, DIMACS and DRAT files
+    /// will be generated for each input file using the input filename as base.
+    /// Example: input.cnf -> output_dir/input.dimacs, output_dir/input.drat
+    #[arg(short, long)]
+    output_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -37,6 +40,17 @@ enum SolverOption {
     Basic,
 }
 
+/// Generate output filename for batch processing
+fn generate_output_filename(input_file: &str, output_dir: &str, extension: &str) -> PathBuf {
+    let input_path = Path::new(input_file);
+    let base_name = input_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("output");
+
+    Path::new(output_dir).join(format!("{}.{}", base_name, extension))
+}
+
 fn main() {
     env_logger::init();
 
@@ -45,6 +59,14 @@ fn main() {
     if args.file.is_empty() {
         eprintln!("No input files specified");
         std::process::exit(1);
+    }
+
+    // Create output directory if specified
+    if let Some(ref output_dir) = args.output_dir {
+        if let Err(e) = fs::create_dir_all(output_dir) {
+            eprintln!("Failed to create output directory '{}': {}", output_dir, e);
+            std::process::exit(1);
+        }
     }
 
     for file in args.file {
@@ -71,18 +93,20 @@ fn main() {
         };
         let duration = start_time.elapsed();
 
-        if let Some(ref dimacs_output_filename) = args.dimacs_output {
-            println!("c runtime: {duration:?}");
+        // Handle output files
+        if file == "-" {
+            // We don't output anything in this case
+        } else if let Some(ref output_dir) = args.output_dir {
+            let dimacs_path = generate_output_filename(&file, output_dir, "dimacs");
             parser::output_dimacs(
-                &mut BufWriter::new(File::create(dimacs_output_filename).unwrap()),
+                &mut BufWriter::new(File::create(&dimacs_path).unwrap()),
                 &answer,
             )
             .unwrap();
-        }
-        if let Some(ref drat_output_filename) = args.drat_output {
             if let Some(proof) = answer.unsat_proof() {
+                let drat_path = generate_output_filename(&file, output_dir, "drat");
                 parser::output_drat(
-                    &mut BufWriter::new(File::create(drat_output_filename).unwrap()),
+                    &mut BufWriter::new(File::create(&drat_path).unwrap()),
                     &proof,
                 )
                 .unwrap();
