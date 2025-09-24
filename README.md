@@ -35,3 +35,8 @@ cargo run --bin random -- \
 uv run scripts/viz.py sat.jsonl
 ```
 ![Relation between L/N ratio and SAT probability](figures/graph.png)
+
+Get a simple DRAT proof of unsatisfiability:
+```bash
+cargo run -- --solver cdcl --drat-output example3.drat examples/example3.cnf
+```
