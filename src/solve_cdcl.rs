@@ -112,16 +112,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> SolverResult {
                 );
 
                 if state.decision_level == 0 {
-                    return SolverResult::UnsatisfiableWithProof(
-                        state
-                            .trail
-                            .iter()
-                            .map(|el| match &el.reason {
-                                TrailReason::UnitProp(clause) => clause.clone(),
-                                _ => unreachable!(),
-                            })
-                            .collect(),
-                    );
+                    return SolverResult::UnsatisfiableWithProof(state.formula.clauses);
                 }
 
                 let mut conflict = ConflictingLits::new(falsified_clause, &state);
