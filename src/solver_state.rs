@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use rayon::prelude::*;
 
 use crate::formula::*;
 
@@ -223,7 +222,7 @@ impl SolverState {
         let results: Vec<_> = self
             .formula
             .clauses
-            .par_iter()
+            .iter()
             .map(|clause| {
                 let mut unassigned_in_clause = None;
                 let mut unassigned_count = 0;
@@ -253,10 +252,14 @@ impl SolverState {
         let mut unassigned = None;
         for result in results {
             match result {
+                ClauseResult::Satisfied => continue,
                 ClauseResult::Falsified(clause) => return Status::Falsified(clause),
+
+                // Importantly, we return the _left-most_ unassigned literal
+                // (while prioritizing unit clauses), which plays well with early-returning
+                // the left-most falsified clause.
                 ClauseResult::Unit(lit, clause) => unit = unit.or(Some((lit, clause))),
                 ClauseResult::Unassigned(lit) => unassigned = unassigned.or(Some(lit)),
-                ClauseResult::Satisfied => continue,
             }
         }
 
