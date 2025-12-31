@@ -249,20 +249,24 @@ impl SolverState {
             .collect();
 
         // Process results: falsified first, then unit, then any unassigned
+        let mut unit = None;
         let mut unassigned = None;
         for result in results {
             match result {
                 ClauseResult::Falsified(clause) => return Status::Falsified(clause),
-                ClauseResult::Unit(lit, clause) => return Status::UnassignedUnit(lit, clause),
-                ClauseResult::Unassigned(lit) => unassigned = Some(lit),
+                ClauseResult::Unit(lit, clause) => unit = unit.or(Some((lit, clause))),
+                ClauseResult::Unassigned(lit) => unassigned = unassigned.or(Some(lit)),
                 ClauseResult::Satisfied => continue,
             }
         }
 
-        if let Some(lit) = unassigned {
-            return Status::UnassignedDecision(lit);
+        if let Some((lit, clause)) = unit {
+            Status::UnassignedUnit(lit, clause)
+        } else if let Some(lit) = unassigned {
+            Status::UnassignedDecision(lit)
+        } else {
+            Status::Satisfied
         }
-        Status::Satisfied
     }
 
     pub fn decide(&mut self, var: Var, value: Val) {
