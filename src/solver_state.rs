@@ -1,6 +1,7 @@
 use itertools::Itertools;
 
 use crate::formula::*;
+use crate::watch_list::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Record {
@@ -147,6 +148,7 @@ pub struct SolverState {
     pub assignment: Assignment,
     pub trail: Vec<TrailElement>,
     pub decision_level: u32,
+    watch_list: WatchList,
 }
 
 impl std::fmt::Display for SolverState {
@@ -182,6 +184,7 @@ impl std::fmt::Display for TrailElement {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum Status {
     Satisfied,
     Falsified(Clause),
@@ -191,11 +194,20 @@ pub enum Status {
 
 impl SolverState {
     pub fn from_cnf(cnf: &CnfFormula) -> Self {
-        Self {
+        let mut state = Self {
             formula: cnf.clone(),
             assignment: Assignment::empty(cnf.num_vars),
             trail: vec![],
             decision_level: 0,
+            watch_list: WatchList::new(cnf.num_vars),
+        };
+        state.initialize_watches();
+        state
+    }
+
+    fn initialize_watches(&mut self) {
+        for (clause_idx, clause) in self.formula.clauses.iter().enumerate() {
+            self.watch_list.add_clause(clause_idx, clause);
         }
     }
 
@@ -209,8 +221,12 @@ impl SolverState {
             .collect_vec()
     }
 
-    // TODO: avoid repeated linear scans; get_status takes the most time by far in profiles
     pub fn get_status(&self) -> Status {
+        // Return cached status if available (set when watches are updated)
+        if let Some(status) = self.watch_list.get_cached_status() {
+            return status.clone();
+        }
+
         #[derive(Debug)]
         enum ClauseResult {
             Falsified(Clause),
@@ -280,6 +296,11 @@ impl SolverState {
             reason: TrailReason::Decision(self.assignment.clone()),
         });
         self.assignment.set(var, value, self.decision_level);
+        self.watch_list.update_for_assignment(
+            Lit { var, value },
+            &self.assignment,
+            &self.formula.clauses,
+        );
     }
 
     pub fn assign_unitprop(&mut self, var: Var, value: Val, clause: Clause) {
@@ -288,10 +309,17 @@ impl SolverState {
             reason: TrailReason::UnitProp(clause),
         });
         self.assignment.set(var, value, self.decision_level);
+        self.watch_list.update_for_assignment(
+            Lit { var, value },
+            &self.assignment,
+            &self.formula.clauses,
+        );
     }
 
     pub fn learn_clause(&mut self, clause: Clause) {
-        self.formula.clauses.push(clause);
+        let clause_idx = self.formula.clauses.len();
+        self.formula.clauses.push(clause.clone());
+        self.watch_list.add_clause(clause_idx, &clause);
     }
 
     pub fn backjump_to_decision_level(&mut self, decision_level: u32) {
@@ -310,6 +338,7 @@ impl SolverState {
         self.trail.truncate(cut_idx);
         self.decision_level = decision_level;
         self.assignment = snapshot;
+        self.watch_list.clear_status(); // TODO: snapshot watch_list instead of needing to clear it?
     }
 
     pub fn pure_literal_eliminate(&mut self) {
