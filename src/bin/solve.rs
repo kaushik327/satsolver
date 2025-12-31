@@ -8,7 +8,7 @@ use clap::Parser;
 use std::fs::{self, File};
 use std::io::{stdin, BufReader, BufWriter, Read};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -69,6 +69,8 @@ fn main() {
         }
     }
 
+    let mut total_duration = Duration::from_secs(0);
+
     for file in args.file {
         let reader: Box<dyn Read> = if file == "-" {
             Box::new(stdin().lock())
@@ -92,6 +94,7 @@ fn main() {
             SolverOption::Basic => solve_simple::solve_basic(&cnf),
         };
         let duration = start_time.elapsed();
+        total_duration += duration;
 
         // Handle output files
         if file == "-" {
@@ -130,4 +133,6 @@ fn main() {
             );
         }
     }
+
+    println!("Total time: {:.3}s", total_duration.as_secs_f64());
 }
