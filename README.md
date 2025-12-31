@@ -15,6 +15,7 @@ RUST_LOG=info cargo run -- --solver cdcl --output-dir out examples/example3.cnf
 Run on all of an open SATLIB dataset:
 ```bash
 mkdir examples/aim
+# see https://www.cs.ubc.ca/~hoos/SATLIB/benchm.html for more
 wget -qO- https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT/DIMACS/AIM/aim.tar.gz | tar xvf - -C examples/aim
 cargo run examples/aim/*
 ```
