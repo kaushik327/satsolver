@@ -17,7 +17,7 @@ Run on all of an open SATLIB dataset:
 mkdir examples/aim
 # see https://www.cs.ubc.ca/~hoos/SATLIB/benchm.html for more
 wget -qO- https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT/DIMACS/AIM/aim.tar.gz | tar xvf - -C examples/aim
-cargo run examples/aim/*
+cargo run --release examples/aim/*
 ```
 
 Run 20 random 3CNF-SAT instances with 40 variables and 160 clauses:
@@ -27,7 +27,7 @@ cargo run --bin random -- -n 40 -k 3 -l 160 -r 20
 
 Recreate a finding about random SAT formulas:
 ```bash
-cargo run --bin random -- \
+cargo run --release --bin random -- \
     -r 100 \
     -n 100 \
     -k 3 \
