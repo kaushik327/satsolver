@@ -35,7 +35,8 @@ fn main() {
                     *num_clauses,
                 );
                 let start = std::time::Instant::now();
-                let answer = solve_cdcl::solve_cdcl(&cnf);
+                let answer =
+                    solve_cdcl::solve_cdcl(&cnf, &satsolver::config::SolverConfig::default());
                 let duration = start.elapsed();
 
                 let result = json!({

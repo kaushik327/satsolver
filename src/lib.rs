@@ -1,3 +1,4 @@
+pub mod config;
 pub mod formula;
 pub mod parser;
 pub mod random;

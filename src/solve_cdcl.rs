@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use itertools::Itertools;
 use log::info;
 
+use crate::config::*;
 use crate::formula::*;
 use crate::solver_state::*;
 
@@ -82,20 +83,22 @@ impl std::fmt::Display for ConflictingLits<'_> {
     }
 }
 
-pub fn solve_cdcl_from_state(mut state: SolverState) -> SolverResult {
+pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> SolverResult {
     info!("Initial formula: {}", state.formula);
     loop {
         match state.get_status() {
             Status::Satisfied => {
                 return SolverResult::Satisfiable(state.assignment.fill_unassigned());
             }
-            Status::UnassignedDecision(lit) => {
-                // Decide some unassigned literal and add it to the trail.
-                info!("Guess: {lit}");
-                state.decide(lit.var, lit.value);
+            Status::UnassignedDecision(var) => {
+                let value = match config.polarity {
+                    PolarityHeuristic::AlwaysFalse | PolarityHeuristic::PhaseSaving => Val::False,
+                    PolarityHeuristic::AlwaysTrue => Val::True,
+                };
+                info!("Guess: {}", Lit { var, value });
+                state.decide(var, value);
             }
             Status::UnassignedUnit(lit, clause) => {
-                // Unit-clause propagation available
                 info!("Unit: {lit} from {clause}");
                 state.assign_unitprop(lit.var, lit.value, clause);
             }
@@ -144,9 +147,10 @@ pub fn solve_cdcl_from_state(mut state: SolverState) -> SolverResult {
     }
 }
 
-pub fn solve_cdcl(cnf: &CnfFormula) -> SolverResult {
-    let state = SolverState::from_cnf(cnf);
-    solve_cdcl_from_state(state)
+pub fn solve_cdcl(cnf: &CnfFormula, config: &SolverConfig) -> SolverResult {
+    let mut state = SolverState::from_cnf(cnf);
+    state.pure_literal_eliminate();
+    solve_cdcl_from_state(state, config)
 }
 
 #[cfg(test)]
@@ -157,7 +161,7 @@ mod tests {
     #[test]
     fn test_solve_cdcl_sat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
-        let result = solve_cdcl(&cnf);
+        let result = solve_cdcl(&cnf, &SolverConfig::default());
         assert!(result.is_satisfiable());
         let assignment = result.into_assignment().unwrap();
         assert!(assignment.get_unassigned_var().is_none() && check_assignment(&cnf, &assignment));
@@ -166,6 +170,6 @@ mod tests {
     #[test]
     fn test_solve_cdcl_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(!solve_cdcl(&cnf).is_satisfiable());
+        assert!(!solve_cdcl(&cnf, &SolverConfig::default()).is_satisfiable());
     }
 }

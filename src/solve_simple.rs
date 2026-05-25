@@ -17,7 +17,14 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> SolverResult {
         match state.get_status() {
             Status::Satisfied => SolverResult::Satisfiable(state.assignment.fill_unassigned()),
             Status::Falsified(_) => SolverResult::Unsatisfiable,
-            Status::UnassignedDecision(lit) | Status::UnassignedUnit(lit, _) => {
+            Status::UnassignedDecision(var) => {
+                let (tstate, fstate) = branch_on_variable(state, var);
+                match solve_backtrack_rec(fstate) {
+                    SolverResult::Satisfiable(assignment) => SolverResult::Satisfiable(assignment),
+                    _ => solve_backtrack_rec(tstate),
+                }
+            }
+            Status::UnassignedUnit(lit, _) => {
                 let (tstate, fstate) = branch_on_variable(state, lit.var);
                 match solve_backtrack_rec(fstate) {
                     SolverResult::Satisfiable(assignment) => SolverResult::Satisfiable(assignment),
@@ -36,8 +43,8 @@ pub fn solve_dpll(cnf: &CnfFormula) -> SolverResult {
         match state.get_status() {
             Status::Satisfied => SolverResult::Satisfiable(state.assignment.fill_unassigned()),
             Status::Falsified(_) => SolverResult::Unsatisfiable,
-            Status::UnassignedDecision(lit) => {
-                let (tstate, fstate) = branch_on_variable(state, lit.var);
+            Status::UnassignedDecision(var) => {
+                let (tstate, fstate) = branch_on_variable(state, var);
                 match solve_dpll_rec(fstate) {
                     SolverResult::Satisfiable(assignment) => SolverResult::Satisfiable(assignment),
                     _ => solve_dpll_rec(tstate),

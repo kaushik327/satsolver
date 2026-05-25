@@ -1,3 +1,4 @@
+use satsolver::config::*;
 use satsolver::parser;
 use satsolver::solve_cdcl;
 use satsolver::solve_cnc;
@@ -20,13 +21,44 @@ struct Args {
     #[arg(short, long, default_value_t = 3)]
     depth: usize,
 
+    /// Variable polarity heuristic (cdcl/cnc only)
+    #[arg(long, default_value = "phase-saving")]
+    polarity: PolarityOption,
+
+    /// Restart strategy (cdcl/cnc only)
+    #[arg(long, default_value = "luby")]
+    restart: RestartOption,
+
+    /// Conflict unit for Luby restarts
+    #[arg(long, default_value_t = 100)]
+    restart_unit: u32,
+
+    /// Initial conflict limit for geometric restarts
+    #[arg(long, default_value_t = 100)]
+    restart_initial: u32,
+
+    /// Growth factor for geometric restarts
+    #[arg(long, default_value_t = 1.5)]
+    restart_factor: f64,
+
+    /// Clause deletion strategy (cdcl/cnc only)
+    #[arg(long, default_value = "lbd")]
+    deletion: DeletionOption,
+
+    /// Maximum LBD to retain when using --deletion=lbd
+    #[arg(long, default_value_t = 6)]
+    deletion_max_lbd: u32,
+
+    /// Fraction of learned clauses to evict when using --deletion=activity
+    #[arg(long, default_value_t = 0.5)]
+    deletion_fraction: f64,
+
     /// Input CNF files to solve. Use '-' for stdin.
     /// Multiple files allowed only when no output files are specified.
     file: Vec<String>,
 
     /// Output directory. When specified, DIMACS and DRAT files
     /// will be generated for each input file using the input filename as base.
-    /// Example: input.cnf -> output_dir/input.dimacs, output_dir/input.drat
     #[arg(short, long)]
     output_dir: Option<String>,
 }
@@ -40,7 +72,27 @@ enum SolverOption {
     Basic,
 }
 
-/// Generate output filename for batch processing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum PolarityOption {
+    AlwaysFalse,
+    AlwaysTrue,
+    PhaseSaving,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum RestartOption {
+    None,
+    Luby,
+    Geometric,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum DeletionOption {
+    None,
+    Lbd,
+    Activity,
+}
+
 fn generate_output_filename(input_file: &str, output_dir: &str, extension: &str) -> PathBuf {
     let input_path = Path::new(input_file);
     let base_name = input_path
@@ -61,13 +113,39 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Create output directory if specified
     if let Some(ref output_dir) = args.output_dir {
         if let Err(e) = fs::create_dir_all(output_dir) {
             eprintln!("Failed to create output directory '{}': {}", output_dir, e);
             std::process::exit(1);
         }
     }
+
+    let config = SolverConfig {
+        polarity: match args.polarity {
+            PolarityOption::AlwaysFalse => PolarityHeuristic::AlwaysFalse,
+            PolarityOption::AlwaysTrue => PolarityHeuristic::AlwaysTrue,
+            PolarityOption::PhaseSaving => PolarityHeuristic::PhaseSaving,
+        },
+        restart: match args.restart {
+            RestartOption::None => RestartStrategy::None,
+            RestartOption::Luby => RestartStrategy::Luby {
+                unit: args.restart_unit,
+            },
+            RestartOption::Geometric => RestartStrategy::Geometric {
+                initial: args.restart_initial,
+                factor: args.restart_factor,
+            },
+        },
+        deletion: match args.deletion {
+            DeletionOption::None => DeletionStrategy::None,
+            DeletionOption::Lbd => DeletionStrategy::Lbd {
+                max_lbd: args.deletion_max_lbd,
+            },
+            DeletionOption::Activity => DeletionStrategy::Activity {
+                fraction: args.deletion_fraction,
+            },
+        },
+    };
 
     let mut total_duration = Duration::from_secs(0);
 
@@ -87,8 +165,8 @@ fn main() {
 
         let start_time = Instant::now();
         let answer: solver_state::SolverResult = match args.solver {
-            SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf),
-            SolverOption::Cnc => solve_cnc::solve_cnc(&cnf, args.depth),
+            SolverOption::Cdcl => solve_cdcl::solve_cdcl(&cnf, &config),
+            SolverOption::Cnc => solve_cnc::solve_cnc(&cnf, args.depth, &config),
             SolverOption::Dpll => solve_simple::solve_dpll(&cnf),
             SolverOption::Backtrack => solve_simple::solve_backtrack(&cnf),
             SolverOption::Basic => solve_simple::solve_basic(&cnf),
@@ -96,9 +174,8 @@ fn main() {
         let duration = start_time.elapsed();
         total_duration += duration;
 
-        // Handle output files
         if file == "-" {
-            // We don't output anything in this case
+            // no output in stdin mode
         } else if let Some(ref output_dir) = args.output_dir {
             let dimacs_path = generate_output_filename(&file, output_dir, "dimacs");
             parser::output_dimacs(

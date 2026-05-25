@@ -188,7 +188,7 @@ impl std::fmt::Display for TrailElement {
 pub enum Status {
     Satisfied,
     Falsified(Clause),
-    UnassignedDecision(Lit),
+    UnassignedDecision(Var),
     UnassignedUnit(Lit, Clause),
 }
 
@@ -281,8 +281,8 @@ impl SolverState {
 
         if let Some((lit, clause)) = unit {
             Status::UnassignedUnit(lit, clause)
-        } else if let Some(lit) = unassigned {
-            Status::UnassignedDecision(lit)
+        } else if unassigned.is_some() {
+            Status::UnassignedDecision(self.assignment.get_unassigned_var().unwrap())
         } else {
             Status::Satisfied
         }
