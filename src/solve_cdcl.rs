@@ -41,6 +41,11 @@ impl<'a> ConflictingLits<'a> {
         }
     }
 
+    fn contains(&self, lit: Lit) -> bool {
+        let level = self.state.assignment.get_decision_level(&lit).unwrap();
+        self.literals.contains(&(level, lit))
+    }
+
     fn insert(&mut self, lit: Lit) {
         self.literals
             .insert((self.state.assignment.get_decision_level(&lit).unwrap(), lit));
@@ -83,45 +88,10 @@ impl std::fmt::Display for ConflictingLits<'_> {
     }
 }
 
-// Luby sequence: luby(i) for i = 0, 1, 2, ...
-// Uses the two-counter recurrence: maintain (u, v); when v catches up to a
-// power-of-two boundary (u & -u == v), reset v to 1 and advance u.
-struct LubySequence {
-    u: u32,
-    v: u32,
-}
-
-impl LubySequence {
-    fn new() -> Self {
-        Self { u: 1, v: 1 }
-    }
-
-    fn next(&mut self) -> u32 {
-        let val = self.v;
-        if self.u & self.u.wrapping_neg() == self.v {
-            self.u += 1;
-            self.v = 1;
-        } else {
-            self.v *= 2;
-        }
-        val
-    }
-}
-
 pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> SolverResult {
     info!("Initial formula: {}", state.formula);
 
-    let mut luby = LubySequence::new();
-    // Absolute conflict count at which to trigger the next restart
-    let mut next_restart: u32 = match config.restart {
-        RestartStrategy::None => u32::MAX,
-        RestartStrategy::Luby { unit } => luby.next() * unit,
-        RestartStrategy::Geometric { initial, .. } => initial,
-    };
-    let mut geometric_gap: u32 = match config.restart {
-        RestartStrategy::Geometric { initial, .. } => initial,
-        _ => 0,
-    };
+    let mut scheduler = RestartScheduler::new(config.restart);
 
     loop {
         match state.get_status() {
@@ -145,7 +115,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                 // We start with the cut placed after all unit propagations,
                 // and incrementally move it backwards until the ensuing
                 // learned clause would contain exactly one literal from
-                // the current decision level.
+                // the current decision level (the 1-UIP condition).
 
                 info!(
                     "Falsified {} at trail: {}",
@@ -160,12 +130,24 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                 let mut conflict = ConflictingLits::new(falsified_clause, &state);
 
                 for trail_element in state.trail.iter().rev() {
-                    // Check the decision levels of the learned clause's literals.
                     info!("\tContradiction: {conflict}");
                     let backjump_level = conflict.get_backjump_level();
                     if backjump_level != state.decision_level {
-                        // We have found a UIP cut.
+                        // 1-UIP found: exactly one literal remains at the current level.
                         let learned_clause = conflict.get_learned_clause();
+                        debug_assert_eq!(
+                            learned_clause
+                                .literals
+                                .iter()
+                                .filter(|lit| {
+                                    state.assignment.get_decision_level(lit)
+                                        == Some(state.decision_level)
+                                })
+                                .count(),
+                            1,
+                            "1-UIP invariant: learned clause must have exactly one literal \
+                             at the current decision level"
+                        );
                         info!(
                             "\tBackjumping from level {} to level {}, learning clause {}",
                             state.decision_level, backjump_level, learned_clause
@@ -175,7 +157,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                         state.backjump_to_decision_level(backjump_level);
                         state.conflict_count += 1;
 
-                        if state.conflict_count >= next_restart {
+                        if scheduler.should_restart(state.conflict_count) {
                             info!(
                                 "Restart at conflict {}, {} learned clauses",
                                 state.conflict_count,
@@ -183,26 +165,18 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                             );
                             state.restart();
                             state.delete_weak_learned_clauses(&config.deletion);
-                            next_restart = state.conflict_count
-                                + match config.restart {
-                                    RestartStrategy::None => u32::MAX,
-                                    RestartStrategy::Luby { unit } => luby.next() * unit,
-                                    RestartStrategy::Geometric { factor, .. } => {
-                                        geometric_gap =
-                                            ((geometric_gap as f64) * factor).ceil() as u32;
-                                        geometric_gap
-                                    }
-                                };
+                            scheduler.advance(state.conflict_count);
                         }
 
                         break;
                     }
 
-                    // Move the cut from the right to the left of this trail element.
-                    // That involves removing this element's literal from the learned
-                    // clause (if it is present), but adding the literals that were used to infer this
-                    // element (if they are not already present).
-                    conflict.update(trail_element);
+                    // Only expand trail elements whose literal is in the conflict set.
+                    // Expanding unrelated literals would add spurious antecedents to the
+                    // learned clause, producing a weaker-than-1-UIP result.
+                    if conflict.contains(trail_element.lit) {
+                        conflict.update(trail_element);
+                    }
                 }
             }
         }
@@ -220,11 +194,16 @@ pub fn solve_cdcl(cnf: &CnfFormula, config: &SolverConfig) -> SolverResult {
 mod tests {
     use super::*;
     use crate::parser::parse_dimacs_str;
+    use crate::solve_simple::{solve_backtrack, solve_dpll};
+
+    fn default_config() -> SolverConfig {
+        SolverConfig::default()
+    }
 
     #[test]
     fn test_solve_cdcl_sat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
-        let result = solve_cdcl(&cnf, &SolverConfig::default());
+        let result = solve_cdcl(&cnf, &default_config());
         assert!(result.is_satisfiable());
         let assignment = result.into_assignment().unwrap();
         assert!(assignment.get_unassigned_var().is_none() && check_assignment(&cnf, &assignment));
@@ -233,7 +212,7 @@ mod tests {
     #[test]
     fn test_solve_cdcl_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
-        assert!(!solve_cdcl(&cnf, &SolverConfig::default()).is_satisfiable());
+        assert!(!solve_cdcl(&cnf, &default_config()).is_satisfiable());
     }
 
     #[test]
@@ -272,12 +251,24 @@ mod tests {
     }
 
     #[test]
-    fn test_luby_sequence() {
-        // 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, ...
-        let expected = [1u32, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8];
-        let mut luby = LubySequence::new();
-        for &exp in &expected {
-            assert_eq!(luby.next(), exp);
+    fn test_polarity_options_sat() {
+        let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
+        for polarity in [
+            PolarityHeuristic::AlwaysFalse,
+            PolarityHeuristic::AlwaysTrue,
+            PolarityHeuristic::PhaseSaving,
+        ] {
+            let config = SolverConfig {
+                polarity,
+                restart: RestartStrategy::None,
+                deletion: DeletionStrategy::None,
+            };
+            let result = solve_cdcl(&cnf, &config);
+            assert!(
+                result.is_satisfiable(),
+                "Expected SAT for polarity {polarity:?}"
+            );
+            assert!(check_assignment(&cnf, &result.into_assignment().unwrap()));
         }
     }
 
@@ -330,28 +321,6 @@ mod tests {
             deletion: DeletionStrategy::None,
         };
         assert!(!solve_cdcl(&cnf, &config).is_satisfiable());
-    }
-
-    #[test]
-    fn test_polarity_options_sat() {
-        let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
-        for polarity in [
-            PolarityHeuristic::AlwaysFalse,
-            PolarityHeuristic::AlwaysTrue,
-            PolarityHeuristic::PhaseSaving,
-        ] {
-            let config = SolverConfig {
-                polarity,
-                restart: RestartStrategy::None,
-                deletion: DeletionStrategy::None,
-            };
-            let result = solve_cdcl(&cnf, &config);
-            assert!(
-                result.is_satisfiable(),
-                "Expected SAT for polarity {polarity:?}"
-            );
-            assert!(check_assignment(&cnf, &result.into_assignment().unwrap()));
-        }
     }
 
     #[test]
@@ -439,5 +408,84 @@ mod tests {
             deletion: DeletionStrategy::Activity { fraction: 0.9 },
         };
         assert!(!solve_cdcl(&cnf, &config).is_satisfiable());
+    }
+
+    // Cross-solver agreement: CDCL, DPLL, and backtrack must agree on SAT/UNSAT
+    // for a suite of formulas. This catches incorrect learned clauses or
+    // backjump bugs that don't affect termination but do affect correctness.
+
+    fn assert_solvers_agree(cnf_bytes: &[u8]) {
+        let cnf = parse_dimacs_str(cnf_bytes).unwrap();
+        let cdcl = solve_cdcl(&cnf, &default_config());
+        let dpll = solve_dpll(&cnf);
+        let backtrack = solve_backtrack(&cnf);
+        assert_eq!(
+            cdcl.is_satisfiable(),
+            dpll.is_satisfiable(),
+            "CDCL and DPLL disagree on SAT/UNSAT"
+        );
+        assert_eq!(
+            cdcl.is_satisfiable(),
+            backtrack.is_satisfiable(),
+            "CDCL and backtrack disagree on SAT/UNSAT"
+        );
+        if let Some(assignment) = cdcl.assignment() {
+            assert!(
+                check_assignment(&cnf, assignment),
+                "CDCL returned an assignment that doesn't satisfy the formula"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cross_solver_sat_chain() {
+        // x1→x2→x3→x4→x5, satisfiable
+        assert_solvers_agree(b"p cnf 5 4\n-1 2 0\n-2 3 0\n-3 4 0\n-4 5 0\n");
+    }
+
+    #[test]
+    fn test_cross_solver_sat_near_phase_transition() {
+        // Structured 3-SAT near the phase transition
+        assert_solvers_agree(
+            b"p cnf 8 12\n\
+              1 2 3 0\n-1 -2 3 0\n1 -2 -3 0\n-1 2 -3 0\n\
+              4 5 6 0\n-4 -5 6 0\n4 -5 -6 0\n-4 5 -6 0\n\
+              1 4 7 0\n2 5 8 0\n-1 -4 7 0\n-2 -5 8 0\n",
+        );
+    }
+
+    #[test]
+    fn test_cross_solver_unsat_minimal() {
+        // Minimal UNSAT: {x1} ∧ {¬x1}
+        assert_solvers_agree(b"p cnf 1 2\n1 0\n-1 0\n");
+    }
+
+    #[test]
+    fn test_cross_solver_unsat_pigeon() {
+        assert_solvers_agree(PIGEON_4_3);
+    }
+
+    #[test]
+    fn test_cross_solver_unsat_structured() {
+        // Partial 3-coloring constraints on K4 — UNSAT
+        assert_solvers_agree(
+            b"p cnf 12 30\n\
+              1 2 3 0\n4 5 6 0\n7 8 9 0\n10 11 12 0\n\
+              -1 -2 0\n-1 -3 0\n-2 -3 0\n\
+              -4 -5 0\n-4 -6 0\n-5 -6 0\n\
+              -7 -8 0\n-7 -9 0\n-8 -9 0\n\
+              -10 -11 0\n-10 -12 0\n-11 -12 0\n\
+              -1 -4 0\n-2 -5 0\n-3 -6 0\n\
+              -1 -7 0\n-2 -8 0\n-3 -9 0\n\
+              -1 -10 0\n-2 -11 0\n-3 -12 0\n\
+              -4 -7 0\n-5 -8 0\n-6 -9 0\n\
+              -4 -10 0\n-5 -11 0\n",
+        );
+    }
+
+    #[test]
+    fn test_cross_solver_sat_xor_chain() {
+        // XOR chain: (x1 ∨ x2) ∧ (¬x1 ∨ ¬x2), etc. — satisfiable
+        assert_solvers_agree(b"p cnf 4 6\n1 2 0\n-1 -2 0\n2 3 0\n-2 -3 0\n3 4 0\n-3 -4 0\n");
     }
 }

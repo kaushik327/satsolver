@@ -24,12 +24,12 @@ pub fn solve_backtrack(cnf: &CnfFormula) -> SolverResult {
                     _ => solve_backtrack_rec(tstate),
                 }
             }
-            Status::UnassignedUnit(lit, _) => {
-                let (tstate, fstate) = branch_on_variable(state, lit.var);
-                match solve_backtrack_rec(fstate) {
-                    SolverResult::Satisfiable(assignment) => SolverResult::Satisfiable(assignment),
-                    _ => solve_backtrack_rec(tstate),
-                }
+            Status::UnassignedUnit(lit, clause) => {
+                // The literal is forced; assigning the known direction avoids
+                // exploring a subtree that is guaranteed to be UNSAT.
+                let mut state = state;
+                state.assign_unitprop(lit.var, lit.value, clause);
+                solve_backtrack_rec(state)
             }
         }
     }

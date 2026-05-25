@@ -266,7 +266,11 @@ impl SolverState {
         let mut levels: Vec<u32> = clause
             .literals
             .iter()
-            .filter_map(|lit| self.assignment.get_decision_level(lit))
+            .map(|lit| {
+                self.assignment
+                    .get_decision_level(lit)
+                    .expect("compute_lbd called with unassigned literal in learned clause")
+            })
             .collect();
         levels.sort_unstable();
         levels.dedup();
@@ -469,8 +473,7 @@ impl SolverState {
     pub fn backjump_to_decision_level(&mut self, decision_level: u32) {
         let (cut_idx, snapshot) = self
             .trail
-            .clone()
-            .into_iter()
+            .iter()
             .enumerate()
             .filter_map(|(idx, elem)| match &elem.reason {
                 TrailReason::Decision(snapshot) => Some((idx, snapshot.clone())),
@@ -531,7 +534,125 @@ pub fn check_assignment(cnf: &CnfFormula, assignment: &Assignment) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::DeletionStrategy;
     use crate::parser::parse_dimacs_str;
+
+    // Directly write an assignment without touching the trail or watch list.
+    // Used in unit tests that only need assignment state (e.g. LBD computation).
+    fn force_assign(state: &mut SolverState, var: Var, value: Val, level: u32) {
+        state.assignment.set(var, value, level);
+        state.decision_level = state.decision_level.max(level);
+    }
+
+    fn lit(index: usize, value: Val) -> Lit {
+        Lit {
+            var: Var { index },
+            value,
+        }
+    }
+
+    #[test]
+    fn test_lbd_single_level() {
+        // All literals from the same decision level → LBD = 1
+        let cnf = parse_dimacs_str(b"p cnf 3 1\n1 2 3 0").unwrap();
+        let mut state = SolverState::from_cnf(&cnf);
+        force_assign(&mut state, Var { index: 1 }, Val::True, 1);
+        force_assign(&mut state, Var { index: 2 }, Val::True, 1);
+        force_assign(&mut state, Var { index: 3 }, Val::False, 1);
+        let clause = Clause {
+            literals: vec![lit(1, Val::False), lit(2, Val::False), lit(3, Val::True)],
+        };
+        assert_eq!(state.compute_lbd(&clause), 1);
+    }
+
+    #[test]
+    fn test_lbd_multiple_levels() {
+        // Each literal from a different level → LBD = 3
+        let cnf = parse_dimacs_str(b"p cnf 3 1\n1 2 3 0").unwrap();
+        let mut state = SolverState::from_cnf(&cnf);
+        force_assign(&mut state, Var { index: 1 }, Val::True, 1);
+        force_assign(&mut state, Var { index: 2 }, Val::True, 2);
+        force_assign(&mut state, Var { index: 3 }, Val::False, 3);
+        let clause = Clause {
+            literals: vec![lit(1, Val::False), lit(2, Val::False), lit(3, Val::True)],
+        };
+        assert_eq!(state.compute_lbd(&clause), 3);
+    }
+
+    #[test]
+    fn test_deletion_lbd_removes_only_high_lbd() {
+        let cnf = parse_dimacs_str(b"p cnf 3 0\n").unwrap();
+        let mut state = SolverState::from_cnf(&cnf);
+        state.seal_original_clauses();
+
+        force_assign(&mut state, Var { index: 1 }, Val::True, 1);
+        force_assign(&mut state, Var { index: 2 }, Val::True, 2);
+        force_assign(&mut state, Var { index: 3 }, Val::True, 3);
+
+        // LBD=1: only var 1 (level 1)
+        state.learn_clause_with_meta(Clause {
+            literals: vec![lit(1, Val::False)],
+        });
+        // LBD=2: vars 1 (level 1) and 2 (level 2)
+        state.learn_clause_with_meta(Clause {
+            literals: vec![lit(1, Val::False), lit(2, Val::False)],
+        });
+        // LBD=3: vars 1, 2, 3 at levels 1, 2, 3
+        state.learn_clause_with_meta(Clause {
+            literals: vec![lit(1, Val::False), lit(2, Val::False), lit(3, Val::False)],
+        });
+
+        assert_eq!(state.clause_meta.len(), 3);
+        state.delete_weak_learned_clauses(&DeletionStrategy::Lbd { max_lbd: 2 });
+
+        // Only the two clauses with LBD ≤ 2 survive
+        assert_eq!(state.clause_meta.len(), 2);
+        assert!(state.clause_meta.iter().all(|m| m.lbd <= 2));
+        assert_eq!(
+            state.formula.clauses.len() - state.learned_from,
+            2,
+            "formula.clauses and clause_meta must stay in sync"
+        );
+    }
+
+    #[test]
+    fn test_deletion_activity_removes_lowest_activity() {
+        let cnf = parse_dimacs_str(b"p cnf 2 0\n").unwrap();
+        let mut state = SolverState::from_cnf(&cnf);
+        state.seal_original_clauses();
+
+        force_assign(&mut state, Var { index: 1 }, Val::True, 1);
+        force_assign(&mut state, Var { index: 2 }, Val::True, 2);
+
+        // Each clause gets a strictly higher activity than the previous.
+        for _ in 0..4 {
+            state.learn_clause_with_meta(Clause {
+                literals: vec![lit(1, Val::False), lit(2, Val::False)],
+            });
+        }
+
+        let activities_before: Vec<f64> = state.clause_meta.iter().map(|m| m.activity).collect();
+        assert!(
+            activities_before.windows(2).all(|w| w[0] < w[1]),
+            "activities should be strictly increasing"
+        );
+
+        // Delete the lowest-activity 50% → keep the 2 newest
+        state.delete_weak_learned_clauses(&DeletionStrategy::Activity { fraction: 0.5 });
+        assert_eq!(state.clause_meta.len(), 2);
+
+        // Every surviving clause must have higher activity than every deleted one
+        let min_surviving = state
+            .clause_meta
+            .iter()
+            .map(|m| m.activity)
+            .fold(f64::MAX, f64::min);
+        let max_deleted = activities_before[..2]
+            .iter()
+            .copied()
+            .fold(f64::MIN, f64::max);
+        assert!(min_surviving > max_deleted);
+    }
 
     #[test]
     fn test_ucp() {
