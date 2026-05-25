@@ -92,8 +92,9 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
             }
             Status::UnassignedDecision(var) => {
                 let value = match config.polarity {
-                    PolarityHeuristic::AlwaysFalse | PolarityHeuristic::PhaseSaving => Val::False,
+                    PolarityHeuristic::AlwaysFalse => Val::False,
                     PolarityHeuristic::AlwaysTrue => Val::True,
+                    PolarityHeuristic::PhaseSaving => state.get_phase(var),
                 };
                 info!("Guess: {}", Lit { var, value });
                 state.decide(var, value);
@@ -131,6 +132,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                             "\tBackjumping from level {} to level {}, learning clause {}",
                             state.decision_level, backjump_level, learned_clause
                         );
+                        state.bump_var_activity(&learned_clause);
                         state.learn_clause(learned_clause);
                         state.backjump_to_decision_level(backjump_level);
                         break;
@@ -171,5 +173,62 @@ mod tests {
     fn test_solve_cdcl_unsat() {
         let cnf = parse_dimacs_str(b"\np cnf 5 5\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0\n-1 -3 0").unwrap();
         assert!(!solve_cdcl(&cnf, &SolverConfig::default()).is_satisfiable());
+    }
+
+    #[test]
+    fn test_phase_saving_remembered_after_backjump() {
+        let cnf = parse_dimacs_str(b"\np cnf 3 2\n1 2 0\n-1 3 0").unwrap();
+        let mut state = SolverState::from_cnf(&cnf);
+        let var1 = Var { index: 1 };
+        assert_eq!(state.get_phase(var1), Val::False);
+        state.decide(var1, Val::True);
+        assert_eq!(state.get_phase(var1), Val::True);
+        state.backjump_to_decision_level(0);
+        // Phase is preserved across backjumps
+        assert_eq!(state.get_phase(var1), Val::True);
+        assert!(state.assignment.get_unassigned_var().is_some());
+    }
+
+    #[test]
+    fn test_vsids_prefers_recently_conflicting_var() {
+        let cnf = parse_dimacs_str(b"\np cnf 4 4\n1 2 0\n3 4 0\n-1 -2 0\n-3 -4 0").unwrap();
+        let mut state = SolverState::from_cnf(&cnf);
+        let clause = Clause {
+            literals: vec![
+                Lit {
+                    var: Var { index: 3 },
+                    value: Val::True,
+                },
+                Lit {
+                    var: Var { index: 4 },
+                    value: Val::True,
+                },
+            ],
+        };
+        state.bump_var_activity(&clause);
+        let decision = state.next_decision_var().unwrap();
+        assert!(decision.index == 3 || decision.index == 4);
+    }
+
+    #[test]
+    fn test_polarity_options_sat() {
+        let cnf = parse_dimacs_str(b"\np cnf 5 4\n1 2 0\n1 -2 0\n3 4 0\n3 -4 0").unwrap();
+        for polarity in [
+            PolarityHeuristic::AlwaysFalse,
+            PolarityHeuristic::AlwaysTrue,
+            PolarityHeuristic::PhaseSaving,
+        ] {
+            let config = SolverConfig {
+                polarity,
+                restart: RestartStrategy::None,
+                deletion: DeletionStrategy::None,
+            };
+            let result = solve_cdcl(&cnf, &config);
+            assert!(
+                result.is_satisfiable(),
+                "Expected SAT for polarity {polarity:?}"
+            );
+            assert!(check_assignment(&cnf, &result.into_assignment().unwrap()));
+        }
     }
 }

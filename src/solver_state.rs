@@ -149,6 +149,9 @@ pub struct SolverState {
     pub trail: Vec<TrailElement>,
     pub decision_level: u32,
     watch_list: WatchList,
+    activity: Vec<f64>,
+    var_inc: f64,
+    phase: Vec<Val>,
 }
 
 impl std::fmt::Display for SolverState {
@@ -200,6 +203,9 @@ impl SolverState {
             trail: vec![],
             decision_level: 0,
             watch_list: WatchList::new(cnf.num_vars),
+            activity: vec![0.0; cnf.num_vars],
+            var_inc: 1.0,
+            phase: vec![Val::False; cnf.num_vars],
         };
         state.initialize_watches();
         state
@@ -208,6 +214,32 @@ impl SolverState {
     fn initialize_watches(&mut self) {
         for (clause_idx, clause) in self.formula.clauses.iter().enumerate() {
             self.watch_list.add_clause(clause_idx, clause);
+        }
+    }
+
+    pub fn next_decision_var(&self) -> Option<Var> {
+        self.activity
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.assignment.assignment[*i].is_none())
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .map(|(i, _)| Var { index: i + 1 })
+    }
+
+    pub fn get_phase(&self, var: Var) -> Val {
+        self.phase[var.index - 1]
+    }
+
+    pub fn bump_var_activity(&mut self, clause: &Clause) {
+        for lit in &clause.literals {
+            self.activity[lit.var.index - 1] += self.var_inc;
+        }
+        self.var_inc *= 1.05;
+        if self.var_inc > 1e100 {
+            for a in &mut self.activity {
+                *a /= 1e100;
+            }
+            self.var_inc /= 1e100;
         }
     }
 
@@ -282,7 +314,7 @@ impl SolverState {
         if let Some((lit, clause)) = unit {
             Status::UnassignedUnit(lit, clause)
         } else if unassigned.is_some() {
-            Status::UnassignedDecision(self.assignment.get_unassigned_var().unwrap())
+            Status::UnassignedDecision(self.next_decision_var().unwrap())
         } else {
             Status::Satisfied
         }
@@ -290,6 +322,7 @@ impl SolverState {
 
     pub fn decide(&mut self, var: Var, value: Val) {
         self.decision_level += 1;
+        self.phase[var.index - 1] = value;
         // TODO: repeatedly cloning the assignment for this reason is inefficient
         self.trail.push(TrailElement {
             lit: Lit { var, value },
@@ -304,6 +337,7 @@ impl SolverState {
     }
 
     pub fn assign_unitprop(&mut self, var: Var, value: Val, clause: Clause) {
+        self.phase[var.index - 1] = value;
         self.trail.push(TrailElement {
             lit: Lit { var, value },
             reason: TrailReason::UnitProp(clause),
