@@ -42,5 +42,12 @@ Get a simple DRAT proof of unsatisfiability:
 cargo run -- --solver cdcl --output-dir out examples/example4.cnf
 ```
 
+Compare heuristics in CDCL:
+```bash
+uv run scripts/heuristics.py
+```
+
 profile:
+```bash
 samply record -r 10000 ./target/profiling/random -n 100 -k 3 -l 420 -r 10
+```
