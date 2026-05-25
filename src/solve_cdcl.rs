@@ -171,7 +171,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                             state.decision_level, backjump_level, learned_clause
                         );
                         state.bump_var_activity(&learned_clause);
-                        state.learn_clause(learned_clause);
+                        state.learn_clause_with_meta(learned_clause);
                         state.backjump_to_decision_level(backjump_level);
                         state.conflict_count += 1;
 
@@ -182,6 +182,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                                 state.formula.clauses.len()
                             );
                             state.restart();
+                            state.delete_weak_learned_clauses(&config.deletion);
                             next_restart = state.conflict_count
                                 + match config.restart {
                                     RestartStrategy::None => u32::MAX,
@@ -211,6 +212,7 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
 pub fn solve_cdcl(cnf: &CnfFormula, config: &SolverConfig) -> SolverResult {
     let mut state = SolverState::from_cnf(cnf);
     state.pure_literal_eliminate();
+    state.seal_original_clauses();
     solve_cdcl_from_state(state, config)
 }
 
@@ -350,5 +352,92 @@ mod tests {
             );
             assert!(check_assignment(&cnf, &result.into_assignment().unwrap()));
         }
+    }
+
+    #[test]
+    fn test_all_configs_agree_unsat() {
+        let cnf = parse_dimacs_str(PIGEON_4_3).unwrap();
+        let configs = [
+            SolverConfig {
+                polarity: PolarityHeuristic::AlwaysFalse,
+                restart: RestartStrategy::None,
+                deletion: DeletionStrategy::None,
+            },
+            SolverConfig {
+                polarity: PolarityHeuristic::PhaseSaving,
+                restart: RestartStrategy::Luby { unit: 1 },
+                deletion: DeletionStrategy::Lbd { max_lbd: 3 },
+            },
+            SolverConfig {
+                polarity: PolarityHeuristic::AlwaysTrue,
+                restart: RestartStrategy::Geometric {
+                    initial: 10,
+                    factor: 2.0,
+                },
+                deletion: DeletionStrategy::Activity { fraction: 0.5 },
+            },
+        ];
+        for config in &configs {
+            assert!(
+                !solve_cdcl(&cnf, config).is_satisfiable(),
+                "Expected UNSAT for config {config:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_configs_agree_sat() {
+        let cnf = parse_dimacs_str(b"\np cnf 10 5\n1 2 3 0\n4 5 6 0\n7 8 9 0\n1 -4 7 0\n2 5 -8 0")
+            .unwrap();
+        let configs = [
+            SolverConfig {
+                polarity: PolarityHeuristic::AlwaysFalse,
+                restart: RestartStrategy::None,
+                deletion: DeletionStrategy::None,
+            },
+            SolverConfig {
+                polarity: PolarityHeuristic::PhaseSaving,
+                restart: RestartStrategy::Luby { unit: 1 },
+                deletion: DeletionStrategy::Lbd { max_lbd: 3 },
+            },
+            SolverConfig {
+                polarity: PolarityHeuristic::AlwaysTrue,
+                restart: RestartStrategy::Geometric {
+                    initial: 3,
+                    factor: 1.5,
+                },
+                deletion: DeletionStrategy::Activity { fraction: 0.5 },
+            },
+        ];
+        for config in &configs {
+            let result = solve_cdcl(&cnf, config);
+            assert!(
+                result.is_satisfiable(),
+                "Expected SAT for config {config:?}"
+            );
+            assert!(check_assignment(&cnf, &result.into_assignment().unwrap()));
+        }
+    }
+
+    #[test]
+    fn test_deletion_lbd_preserves_correctness() {
+        let cnf = parse_dimacs_str(PIGEON_4_3).unwrap();
+        let config = SolverConfig {
+            polarity: PolarityHeuristic::AlwaysFalse,
+            restart: RestartStrategy::Luby { unit: 1 },
+            deletion: DeletionStrategy::Lbd { max_lbd: 1 },
+        };
+        assert!(!solve_cdcl(&cnf, &config).is_satisfiable());
+    }
+
+    #[test]
+    fn test_deletion_activity_preserves_correctness() {
+        let cnf = parse_dimacs_str(PIGEON_4_3).unwrap();
+        let config = SolverConfig {
+            polarity: PolarityHeuristic::AlwaysFalse,
+            restart: RestartStrategy::Luby { unit: 1 },
+            deletion: DeletionStrategy::Activity { fraction: 0.9 },
+        };
+        assert!(!solve_cdcl(&cnf, &config).is_satisfiable());
     }
 }

@@ -1,5 +1,6 @@
 use itertools::Itertools;
 
+use crate::config::DeletionStrategy;
 use crate::formula::*;
 use crate::watch_list::*;
 
@@ -143,6 +144,12 @@ impl Clause {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+struct LearnedClauseMeta {
+    lbd: u32,
+    activity: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct SolverState {
     pub formula: CnfFormula,
     pub assignment: Assignment,
@@ -153,6 +160,9 @@ pub struct SolverState {
     var_inc: f64,
     phase: Vec<Val>,
     pub conflict_count: u32,
+    learned_from: usize,
+    clause_meta: Vec<LearnedClauseMeta>,
+    clause_act_inc: f64,
 }
 
 impl std::fmt::Display for SolverState {
@@ -208,6 +218,9 @@ impl SolverState {
             var_inc: 1.0,
             phase: vec![Val::False; cnf.num_vars],
             conflict_count: 0,
+            learned_from: cnf.clauses.len(),
+            clause_meta: vec![],
+            clause_act_inc: 1.0,
         };
         state.initialize_watches();
         state
@@ -242,6 +255,97 @@ impl SolverState {
                 *a /= 1e100;
             }
             self.var_inc /= 1e100;
+        }
+    }
+
+    pub fn seal_original_clauses(&mut self) {
+        self.learned_from = self.formula.clauses.len();
+    }
+
+    fn compute_lbd(&self, clause: &Clause) -> u32 {
+        let mut levels: Vec<u32> = clause
+            .literals
+            .iter()
+            .filter_map(|lit| self.assignment.get_decision_level(lit))
+            .collect();
+        levels.sort_unstable();
+        levels.dedup();
+        levels.len() as u32
+    }
+
+    pub fn learn_clause_with_meta(&mut self, clause: Clause) {
+        let lbd = self.compute_lbd(&clause);
+        self.clause_meta.push(LearnedClauseMeta {
+            lbd,
+            activity: self.clause_act_inc,
+        });
+        self.clause_act_inc *= 1.001;
+        if self.clause_act_inc > 1e100 {
+            for m in &mut self.clause_meta {
+                m.activity /= 1e100;
+            }
+            self.clause_act_inc /= 1e100;
+        }
+        self.learn_clause(clause);
+    }
+
+    pub fn delete_weak_learned_clauses(&mut self, strategy: &DeletionStrategy) {
+        let n_learned = self.formula.clauses.len() - self.learned_from;
+        if n_learned == 0 {
+            return;
+        }
+
+        let keep: Vec<bool> = match strategy {
+            DeletionStrategy::None => return,
+            DeletionStrategy::Lbd { max_lbd } => {
+                self.clause_meta.iter().map(|m| m.lbd <= *max_lbd).collect()
+            }
+            DeletionStrategy::Activity { fraction } => {
+                let mut indexed: Vec<(usize, f64)> = self
+                    .clause_meta
+                    .iter()
+                    .map(|m| m.activity)
+                    .enumerate()
+                    .collect();
+                indexed.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+                let keep_count = ((n_learned as f64) * (1.0 - fraction)).ceil() as usize;
+                let mut keep = vec![false; n_learned];
+                for (i, _) in indexed.into_iter().take(keep_count) {
+                    keep[i] = true;
+                }
+                keep
+            }
+        };
+
+        let mut new_learned: Vec<Clause> = Vec::new();
+        let mut new_meta: Vec<LearnedClauseMeta> = Vec::new();
+
+        for (offset, should_keep) in keep.into_iter().enumerate() {
+            if should_keep {
+                new_learned.push(self.formula.clauses[self.learned_from + offset].clone());
+                new_meta.push(self.clause_meta[offset].clone());
+            }
+        }
+
+        self.formula.clauses.truncate(self.learned_from);
+        self.formula.clauses.extend(new_learned);
+        self.clause_meta = new_meta;
+
+        self.rebuild_watches();
+    }
+
+    fn rebuild_watches(&mut self) {
+        self.watch_list = WatchList::new(self.formula.num_vars);
+        for (idx, clause) in self.formula.clauses.iter().enumerate() {
+            self.watch_list.add_clause(idx, clause);
+        }
+        // Replay trail assignments so the watch list reflects the current state.
+        // After a restart the trail is always empty, but we replay anyway so
+        // this method is correct if ever called mid-search.
+        let lits: Vec<Lit> = self.trail.iter().map(|e| e.lit).collect();
+        for lit in lits {
+            self.watch_list
+                .update_for_assignment(lit, &self.assignment, &self.formula.clauses);
         }
     }
 

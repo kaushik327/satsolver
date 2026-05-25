@@ -60,6 +60,7 @@ pub fn solve_cnc(cnf: &CnfFormula, depth: usize, config: &SolverConfig) -> Solve
     // Initialize solver state
     let mut blank_state = SolverState::from_cnf(cnf);
     blank_state.pure_literal_eliminate();
+    blank_state.seal_original_clauses();
 
     // Set up communication channel
     let (tx, rx) = mpsc::channel();
