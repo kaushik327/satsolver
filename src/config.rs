@@ -99,7 +99,7 @@ impl RestartScheduler {
                 self.geometric_gap
             }
         };
-        self.next_restart = conflict_count + gap;
+        self.next_restart = conflict_count.saturating_add(gap);
     }
 }
 

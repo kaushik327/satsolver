@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use clap::Parser;
+use satsolver::config::SolverConfig;
 use satsolver::random;
 use satsolver::solve_cdcl;
 use serde_json::json;
@@ -35,8 +36,7 @@ fn main() {
                     *num_clauses,
                 );
                 let start = std::time::Instant::now();
-                let answer =
-                    solve_cdcl::solve_cdcl(&cnf, &satsolver::config::SolverConfig::default());
+                let answer = solve_cdcl::solve_cdcl(&cnf, &SolverConfig::default());
                 let duration = start.elapsed();
 
                 let result = json!({

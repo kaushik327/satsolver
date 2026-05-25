@@ -143,6 +143,97 @@ impl Clause {
     }
 }
 
+// Indexed max-heap for VSIDS decision ordering. Supports O(log n) insert,
+// remove, and priority-increase (sift_up only — activity is monotone increasing).
+#[derive(Clone, Debug, PartialEq)]
+struct ActivityHeap {
+    heap: Vec<usize>,        // heap positions → 0-based var indices
+    pos: Vec<Option<usize>>, // 0-based var index → heap position (None if absent)
+}
+
+impl ActivityHeap {
+    fn new(n: usize) -> Self {
+        Self {
+            heap: (0..n).collect(),
+            pos: (0..n).map(Some).collect(),
+        }
+    }
+
+    fn peek(&self) -> Option<usize> {
+        self.heap.first().copied()
+    }
+
+    fn sift_up(&mut self, mut p: usize, activity: &[f64]) {
+        while p > 0 {
+            let parent = (p - 1) / 2;
+            if activity[self.heap[p]] > activity[self.heap[parent]] {
+                self.pos[self.heap[p]] = Some(parent);
+                self.pos[self.heap[parent]] = Some(p);
+                self.heap.swap(p, parent);
+                p = parent;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn sift_down(&mut self, mut p: usize, activity: &[f64]) {
+        let n = self.heap.len();
+        loop {
+            let left = 2 * p + 1;
+            let right = 2 * p + 2;
+            let mut largest = p;
+            if left < n && activity[self.heap[left]] > activity[self.heap[largest]] {
+                largest = left;
+            }
+            if right < n && activity[self.heap[right]] > activity[self.heap[largest]] {
+                largest = right;
+            }
+            if largest == p {
+                break;
+            }
+            self.pos[self.heap[p]] = Some(largest);
+            self.pos[self.heap[largest]] = Some(p);
+            self.heap.swap(p, largest);
+            p = largest;
+        }
+    }
+
+    fn insert(&mut self, var_idx: usize, activity: &[f64]) {
+        if self.pos[var_idx].is_none() {
+            let p = self.heap.len();
+            self.heap.push(var_idx);
+            self.pos[var_idx] = Some(p);
+            self.sift_up(p, activity);
+        }
+    }
+
+    fn remove(&mut self, var_idx: usize, activity: &[f64]) {
+        let Some(p) = self.pos[var_idx].take() else {
+            return;
+        };
+        let last = self.heap.len() - 1;
+        if p != last {
+            let moved = self.heap[last];
+            self.heap[p] = moved;
+            self.pos[moved] = Some(p);
+            self.heap.pop();
+            self.sift_up(p, activity);
+            if self.pos[moved] == Some(p) {
+                self.sift_down(p, activity);
+            }
+        } else {
+            self.heap.pop();
+        }
+    }
+
+    fn update(&mut self, var_idx: usize, activity: &[f64]) {
+        if let Some(p) = self.pos[var_idx] {
+            self.sift_up(p, activity);
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct LearnedClauseMeta {
     lbd: u32,
@@ -158,6 +249,7 @@ pub struct SolverState {
     watch_list: WatchList,
     activity: Vec<f64>,
     var_inc: f64,
+    var_heap: ActivityHeap,
     phase: Vec<Val>,
     pub conflict_count: u32,
     learned_from: usize,
@@ -216,6 +308,7 @@ impl SolverState {
             watch_list: WatchList::new(cnf.num_vars),
             activity: vec![0.0; cnf.num_vars],
             var_inc: 1.0,
+            var_heap: ActivityHeap::new(cnf.num_vars),
             phase: vec![Val::False; cnf.num_vars],
             conflict_count: 0,
             learned_from: cnf.clauses.len(),
@@ -233,12 +326,7 @@ impl SolverState {
     }
 
     pub fn next_decision_var(&self) -> Option<Var> {
-        self.activity
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| self.assignment.assignment[*i].is_none())
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| Var { index: i + 1 })
+        self.var_heap.peek().map(|i| Var { index: i + 1 })
     }
 
     pub fn get_phase(&self, var: Var) -> Val {
@@ -247,7 +335,11 @@ impl SolverState {
 
     pub fn bump_var_activity(&mut self, clause: &Clause) {
         for lit in &clause.literals {
-            self.activity[lit.var.index - 1] += self.var_inc;
+            let i = lit.var.index - 1;
+            self.activity[i] += self.var_inc;
+            let heap = &mut self.var_heap;
+            let activity = &self.activity;
+            heap.update(i, activity);
         }
         self.var_inc *= 1.05;
         if self.var_inc > 1e100 {
@@ -255,6 +347,8 @@ impl SolverState {
                 *a /= 1e100;
             }
             self.var_inc /= 1e100;
+            // Relative order is preserved by uniform rescaling, so the heap
+            // remains valid — no rebuild needed.
         }
     }
 
@@ -437,6 +531,9 @@ impl SolverState {
     pub fn decide(&mut self, var: Var, value: Val) {
         self.decision_level += 1;
         self.phase[var.index - 1] = value;
+        let heap = &mut self.var_heap;
+        let activity = &self.activity;
+        heap.remove(var.index - 1, activity);
         // TODO: repeatedly cloning the assignment for this reason is inefficient
         self.trail.push(TrailElement {
             lit: Lit { var, value },
@@ -452,6 +549,9 @@ impl SolverState {
 
     pub fn assign_unitprop(&mut self, var: Var, value: Val, clause: Clause) {
         self.phase[var.index - 1] = value;
+        let heap = &mut self.var_heap;
+        let activity = &self.activity;
+        heap.remove(var.index - 1, activity);
         self.trail.push(TrailElement {
             lit: Lit { var, value },
             reason: TrailReason::UnitProp(clause),
@@ -482,10 +582,19 @@ impl SolverState {
             .nth(decision_level as usize)
             .unwrap_or((0, Assignment::empty(self.formula.num_vars)));
 
+        let unassigned: Vec<usize> = self.trail[cut_idx..]
+            .iter()
+            .map(|e| e.lit.var.index - 1)
+            .collect();
         self.trail.truncate(cut_idx);
         self.decision_level = decision_level;
         self.assignment = snapshot;
         self.watch_list.clear_status(); // TODO: snapshot watch_list instead of needing to clear it?
+        for var_idx in unassigned {
+            let heap = &mut self.var_heap;
+            let activity = &self.activity;
+            heap.insert(var_idx, activity);
+        }
     }
 
     pub fn pure_literal_eliminate(&mut self) {
