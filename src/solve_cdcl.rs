@@ -83,8 +83,46 @@ impl std::fmt::Display for ConflictingLits<'_> {
     }
 }
 
+// Luby sequence: luby(i) for i = 0, 1, 2, ...
+// Uses the two-counter recurrence: maintain (u, v); when v catches up to a
+// power-of-two boundary (u & -u == v), reset v to 1 and advance u.
+struct LubySequence {
+    u: u32,
+    v: u32,
+}
+
+impl LubySequence {
+    fn new() -> Self {
+        Self { u: 1, v: 1 }
+    }
+
+    fn next(&mut self) -> u32 {
+        let val = self.v;
+        if self.u & self.u.wrapping_neg() == self.v {
+            self.u += 1;
+            self.v = 1;
+        } else {
+            self.v *= 2;
+        }
+        val
+    }
+}
+
 pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> SolverResult {
     info!("Initial formula: {}", state.formula);
+
+    let mut luby = LubySequence::new();
+    // Absolute conflict count at which to trigger the next restart
+    let mut next_restart: u32 = match config.restart {
+        RestartStrategy::None => u32::MAX,
+        RestartStrategy::Luby { unit } => luby.next() * unit,
+        RestartStrategy::Geometric { initial, .. } => initial,
+    };
+    let mut geometric_gap: u32 = match config.restart {
+        RestartStrategy::Geometric { initial, .. } => initial,
+        _ => 0,
+    };
+
     loop {
         match state.get_status() {
             Status::Satisfied => {
@@ -135,6 +173,27 @@ pub fn solve_cdcl_from_state(mut state: SolverState, config: &SolverConfig) -> S
                         state.bump_var_activity(&learned_clause);
                         state.learn_clause(learned_clause);
                         state.backjump_to_decision_level(backjump_level);
+                        state.conflict_count += 1;
+
+                        if state.conflict_count >= next_restart {
+                            info!(
+                                "Restart at conflict {}, {} learned clauses",
+                                state.conflict_count,
+                                state.formula.clauses.len()
+                            );
+                            state.restart();
+                            next_restart = state.conflict_count
+                                + match config.restart {
+                                    RestartStrategy::None => u32::MAX,
+                                    RestartStrategy::Luby { unit } => luby.next() * unit,
+                                    RestartStrategy::Geometric { factor, .. } => {
+                                        geometric_gap =
+                                            ((geometric_gap as f64) * factor).ceil() as u32;
+                                        geometric_gap
+                                    }
+                                };
+                        }
+
                         break;
                     }
 
@@ -208,6 +267,67 @@ mod tests {
         state.bump_var_activity(&clause);
         let decision = state.next_decision_var().unwrap();
         assert!(decision.index == 3 || decision.index == 4);
+    }
+
+    #[test]
+    fn test_luby_sequence() {
+        // 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, ...
+        let expected = [1u32, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8];
+        let mut luby = LubySequence::new();
+        for &exp in &expected {
+            assert_eq!(luby.next(), exp);
+        }
+    }
+
+    // Pigeonhole formula: 4 pigeons, 3 holes — UNSAT, good stress test.
+    const PIGEON_4_3: &[u8] = b"p cnf 12 22
+1 2 3 0
+4 5 6 0
+7 8 9 0
+10 11 12 0
+-1 -4 0
+-1 -7 0
+-1 -10 0
+-4 -7 0
+-4 -10 0
+-7 -10 0
+-2 -5 0
+-2 -8 0
+-2 -11 0
+-5 -8 0
+-5 -11 0
+-8 -11 0
+-3 -6 0
+-3 -9 0
+-3 -12 0
+-6 -9 0
+-6 -12 0
+-9 -12 0
+";
+
+    #[test]
+    fn test_luby_restart_terminates_unsat() {
+        let cnf = parse_dimacs_str(PIGEON_4_3).unwrap();
+        let config = SolverConfig {
+            polarity: PolarityHeuristic::AlwaysFalse,
+            restart: RestartStrategy::Luby { unit: 5 },
+            deletion: DeletionStrategy::None,
+        };
+        assert!(!solve_cdcl(&cnf, &config).is_satisfiable());
+    }
+
+    #[test]
+    fn test_geometric_restart_terminates_unsat() {
+        let cnf = parse_dimacs_str(PIGEON_4_3).unwrap();
+        let config = SolverConfig {
+            polarity: PolarityHeuristic::AlwaysFalse,
+            restart: RestartStrategy::Geometric {
+                initial: 5,
+                factor: 1.5,
+            },
+            deletion: DeletionStrategy::None,
+        };
+        assert!(!solve_cdcl(&cnf, &config).is_satisfiable());
     }
 
     #[test]

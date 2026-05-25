@@ -152,6 +152,7 @@ pub struct SolverState {
     activity: Vec<f64>,
     var_inc: f64,
     phase: Vec<Val>,
+    pub conflict_count: u32,
 }
 
 impl std::fmt::Display for SolverState {
@@ -206,6 +207,7 @@ impl SolverState {
             activity: vec![0.0; cnf.num_vars],
             var_inc: 1.0,
             phase: vec![Val::False; cnf.num_vars],
+            conflict_count: 0,
         };
         state.initialize_watches();
         state
@@ -241,6 +243,10 @@ impl SolverState {
             }
             self.var_inc /= 1e100;
         }
+    }
+
+    pub fn restart(&mut self) {
+        self.backjump_to_decision_level(0);
     }
 
     #[cfg(test)]
