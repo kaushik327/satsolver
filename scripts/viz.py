@@ -43,7 +43,7 @@ def calculate_metrics(
 
     for ratio, records in ratio_groups.items():
         # Calculate average duration
-        avg_duration = sum(r["duration"] for r in records) / len(records)
+        avg_duration = sum(r["duration_ms"] for r in records) / len(records)
 
         # Calculate SAT prob
         sat_prob = sum(1 for r in records if r["sat"]) / len(records)
